@@ -15,6 +15,14 @@ jobs:
         run: cmake --build build -j
       - name: Test
         run: ctest --test-dir build --output-on-failure
+      - name: Regularization benchmark
+        run: |
+          ODE_REG_BENCH_SAMPLES=5 ODE_REG_BENCH_ITERS=10 ./build/ode_regularization_benchmark | tee build/regularization_benchmark.txt
+      - name: Upload benchmark artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: regularization-benchmark-debug
+          path: build/regularization_benchmark.txt
 
   asan:
     runs-on: ubuntu-latest

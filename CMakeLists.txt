@@ -198,6 +198,10 @@ if(ODE_BUILD_TESTS)
   add_executable(ode_method_compare_benchmark tests/ode_method_compare_benchmark.cpp)
   target_link_libraries(ode_method_compare_benchmark PRIVATE ode $<$<TARGET_EXISTS:fmt::fmt>:fmt::fmt>)
 
+  add_executable(ode_regularization_benchmark tests/regularization_benchmark.cpp)
+  target_link_libraries(ode_regularization_benchmark PRIVATE ode $<$<TARGET_EXISTS:fmt::fmt>:fmt::fmt>)
+  add_test(NAME ode_regularization_benchmark_smoke COMMAND ode_regularization_benchmark)
+
   add_test(
     NAME ode_package_install_smoke
     COMMAND ${CMAKE_COMMAND}
