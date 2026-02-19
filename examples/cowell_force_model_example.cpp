@@ -1,5 +1,6 @@
 #include <cmath>
 #include <numbers>
+#include <vector>
 
 #include <Eigen/Core>
 
@@ -110,13 +111,13 @@ class CowellForceModel {
 int main() {
   constexpr double kMu = 398600.4418;  // km^3/s^2
   constexpr double kR0 = 7000.0;       // km
-  const double v0 = std::sqrt(kMu / kR0);
+  const double v0_kms = std::sqrt(kMu / kR0);
   const double period_s = 2.0 * std::numbers::pi * std::sqrt((kR0 * kR0 * kR0) / kMu);
 
   CowellForceModel forces;
 
   State x0(6);
-  x0 << kR0, 0.0, 0.0, 0.0, v0, 0.0;
+  x0 << kR0, 0.0, 0.0, 0.0, v0_kms, 0.0;
 
   auto rhs = [&forces](double t, const State& x, State& dxdt) {
     const Vec3 r = x.segment<3>(0);
@@ -136,18 +137,51 @@ int main() {
   opt.h_max = 60.0;
 
   const double tf = 2.0 * period_s;
-  const auto res = ode::eigen::integrate(ode::RKMethod::RKF78, rhs, 0.0, x0, tf, opt);
-  if (res.status != ode::IntegratorStatus::Success) {
-    ode::log::Error("Cowell propagation failed, status=", ode::ToString(res.status));
+  const auto rk = ode::eigen::integrate(ode::RKMethod::RKF78, rhs, 0.0, x0, tf, opt);
+  if (rk.status != ode::IntegratorStatus::Success) {
+    ode::log::Error("Cowell RKF78 propagation failed, status=", ode::ToString(rk.status));
+    return 1;
+  }
+
+  std::vector<double> r0{ x0(0), x0(1), x0(2) };
+  std::vector<double> v0_vec{x0(3), x0(4), x0(5)};
+  auto accel = [&forces](double t,
+                         const std::vector<double>& r,
+                         const std::vector<double>& v,
+                         std::vector<double>& a) {
+    const Vec3 r3{r[0], r[1], r[2]};
+    const Vec3 v3{v[0], v[1], v[2]};
+    const Vec3 at = forces.TotalAcceleration(t, r3, v3);
+    a.resize(3);
+    a[0] = at.x();
+    a[1] = at.y();
+    a[2] = at.z();
+  };
+
+  ode::multistep::GaussJackson8Options gj_opt;
+  gj_opt.h = 10.0;
+  gj_opt.corrector_iterations = 2;
+  const auto gj = ode::multistep::integrate_gauss_jackson8(accel, 0.0, r0, v0_vec, tf, gj_opt);
+  if (gj.status != ode::IntegratorStatus::Success) {
+    ode::log::Error("Cowell Gauss-Jackson propagation failed, status=", ode::ToString(gj.status));
     return 1;
   }
 
   const ForceBreakdown a0 = forces.Accelerations(0.0, x0.segment<3>(0), x0.segment<3>(3));
-  ode::log::Info("Cowell force-model example complete");
-  ode::log::Info("t_final [s] = ", res.t, " (", tf, ")");
-  ode::log::Info("final r [km] = [", res.y(0), ", ", res.y(1), ", ", res.y(2), "]");
-  ode::log::Info("final v [km/s] = [", res.y(3), ", ", res.y(4), ", ", res.y(5), "]");
-  ode::log::Info("step stats accepted/rejected = ", res.stats.accepted_steps, "/", res.stats.rejected_steps);
+  const double dr =
+      std::sqrt(std::pow(gj.r[0] - rk.y(0), 2) + std::pow(gj.r[1] - rk.y(1), 2) + std::pow(gj.r[2] - rk.y(2), 2));
+  const double dv =
+      std::sqrt(std::pow(gj.v[0] - rk.y(3), 2) + std::pow(gj.v[1] - rk.y(4), 2) + std::pow(gj.v[2] - rk.y(5), 2));
+
+  ode::log::Info("Cowell force-model example complete (RKF78 + Gauss-Jackson)");
+  ode::log::Info("t_final [s] = ", rk.t, " (", tf, ")");
+  ode::log::Info("RKF78 final r [km] = [", rk.y(0), ", ", rk.y(1), ", ", rk.y(2), "]");
+  ode::log::Info("RKF78 final v [km/s] = [", rk.y(3), ", ", rk.y(4), ", ", rk.y(5), "]");
+  ode::log::Info("RKF78 steps accepted/rejected = ", rk.stats.accepted_steps, "/", rk.stats.rejected_steps);
+  ode::log::Info("GJ final r [km] = [", gj.r[0], ", ", gj.r[1], ", ", gj.r[2], "]");
+  ode::log::Info("GJ final v [km/s] = [", gj.v[0], ", ", gj.v[1], ", ", gj.v[2], "]");
+  ode::log::Info("GJ steps accepted/rejected = ", gj.stats.accepted_steps, "/", gj.stats.rejected_steps);
+  ode::log::Info("GJ-RKF78 delta |dr| [km] = ", dr, "  |dv| [km/s] = ", dv);
   ode::log::Info("a_grav  [km/s^2] = ", a0.grav.transpose());
   ode::log::Info("a_j2    [km/s^2] = ", a0.j2.transpose());
   ode::log::Info("a_drag  [km/s^2] = ", a0.drag.transpose());
@@ -157,4 +191,3 @@ int main() {
 
   return 0;
 }
-
