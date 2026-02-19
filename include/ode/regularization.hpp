@@ -12,6 +12,7 @@
 
 #include "ode/sundman.hpp"
 #include "ode/types.hpp"
+#include "ode/uncertainty.hpp"
 
 namespace ode::regularization {
 
@@ -50,6 +51,8 @@ struct RegularizationResult3D {
   TwoBody3DState state{};
   IntegratorStats stats{};
 };
+
+using RegularizedVariationalResult = ode::uncertainty::StateStmCovResult;
 
 [[nodiscard]] inline bool solve2x2(double a11,
                                    double a12,
@@ -311,6 +314,112 @@ template <class Accel2DFn>
   out.stats = res.stats;
   if (res.y.size() == 4) {
     out.state = {res.y[0], res.y[1], res.y[2], res.y[3]};
+  }
+  return out;
+}
+
+template <class Accel2DFn, class AccelJacobian2DFn, class ProcessNoiseFn>
+[[nodiscard]] inline RegularizedVariationalResult integrate_cowell_sundman_variational_2d(
+    Accel2DFn&& acceleration,
+    AccelJacobian2DFn&& accel_jacobian_fn,
+    ProcessNoiseFn&& q_fn,
+    RKMethod method,
+    double t0,
+    const TwoBody2DState& s0,
+    const ode::DynamicMatrix& p0,
+    double t1,
+    IntegratorOptions opt,
+    double min_radius_km = 1e-12) {
+  RegularizedVariationalResult out{};
+  out.t = t0;
+  out.x = {s0.x, s0.y, s0.vx, s0.vy};
+  out.phi.assign(16, 0.0);
+  for (int i = 0; i < 4; ++i) {
+    out.phi[static_cast<std::size_t>(i * 4 + i)] = 1.0;
+  }
+  if (!(min_radius_km > 0.0) || p0.size() != 16) {
+    out.status = IntegratorStatus::InvalidStepSize;
+    return out;
+  }
+  out.p = p0;
+
+  std::vector<double> y0(4 + 16 + 16, 0.0);
+  y0[0] = s0.x;
+  y0[1] = s0.y;
+  y0[2] = s0.vx;
+  y0[3] = s0.vy;
+  for (int i = 0; i < 16; ++i) {
+    y0[4 + i] = out.phi[static_cast<std::size_t>(i)];
+    y0[4 + 16 + i] = p0[static_cast<std::size_t>(i)];
+  }
+
+  auto rhs = [&](double t, const std::vector<double>& y, std::vector<double>& dydt) {
+    dydt.assign(4 + 16 + 16, 0.0);
+    const TwoBody2DState s{y[0], y[1], y[2], y[3]};
+
+    std::array<double, 2> a{};
+    acceleration(t, s, a);
+    std::array<double, 4> ar{};
+    std::array<double, 4> av{};
+    if (!accel_jacobian_fn(t, s, ar, av)) {
+      std::fill(dydt.begin(), dydt.end(), std::numeric_limits<double>::quiet_NaN());
+      return;
+    }
+
+    ode::DynamicMatrix q;
+    if (!q_fn(t, s, q) || q.size() != 16) {
+      std::fill(dydt.begin(), dydt.end(), std::numeric_limits<double>::quiet_NaN());
+      return;
+    }
+
+    dydt[0] = y[2];
+    dydt[1] = y[3];
+    dydt[2] = a[0];
+    dydt[3] = a[1];
+
+    std::array<double, 16> amat{
+        0.0,   0.0,   1.0,   0.0,
+        0.0,   0.0,   0.0,   1.0,
+        ar[0], ar[1], av[0], av[1],
+        ar[2], ar[3], av[2], av[3]};
+
+    for (int i = 0; i < 4; ++i) {
+      for (int j = 0; j < 4; ++j) {
+        double sphi = 0.0;
+        for (int k = 0; k < 4; ++k) {
+          sphi += amat[static_cast<std::size_t>(i * 4 + k)] * y[4 + k * 4 + j];
+        }
+        dydt[4 + i * 4 + j] = sphi;
+      }
+    }
+
+    const int p_off = 4 + 16;
+    for (int i = 0; i < 4; ++i) {
+      for (int j = 0; j < 4; ++j) {
+        double ap = 0.0;
+        double pat = 0.0;
+        for (int k = 0; k < 4; ++k) {
+          ap += amat[static_cast<std::size_t>(i * 4 + k)] * y[p_off + k * 4 + j];
+          pat += y[p_off + i * 4 + k] * amat[static_cast<std::size_t>(j * 4 + k)];
+        }
+        dydt[p_off + i * 4 + j] = ap + pat + q[static_cast<std::size_t>(i * 4 + j)];
+      }
+    }
+  };
+
+  auto dt_ds = [min_radius_km](double, const std::vector<double>& y) {
+    const double r = std::sqrt(y[0] * y[0] + y[1] * y[1]);
+    return std::max(min_radius_km, r);
+  };
+
+  const auto res = ode::integrate_sundman(method, rhs, dt_ds, t0, y0, t1, opt);
+  out.status = res.status;
+  out.t = res.t;
+  out.stats = res.stats;
+  if (res.y.size() == y0.size()) {
+    out.x.assign(res.y.begin(), res.y.begin() + 4);
+    out.phi.assign(res.y.begin() + 4, res.y.begin() + 20);
+    out.p.assign(res.y.begin() + 20, res.y.end());
   }
   return out;
 }
@@ -668,6 +777,123 @@ template <class Accel3DFn>
   out.stats = res.stats;
   if (res.y.size() == 6) {
     out.state = {res.y[0], res.y[1], res.y[2], res.y[3], res.y[4], res.y[5]};
+  }
+  return out;
+}
+
+template <class Accel3DFn, class AccelJacobian3DFn, class ProcessNoiseFn>
+[[nodiscard]] inline RegularizedVariationalResult integrate_cowell_sundman_variational_3d(
+    Accel3DFn&& acceleration,
+    AccelJacobian3DFn&& accel_jacobian_fn,
+    ProcessNoiseFn&& q_fn,
+    RKMethod method,
+    double t0,
+    const TwoBody3DState& s0,
+    const ode::DynamicMatrix& p0,
+    double t1,
+    IntegratorOptions opt,
+    double min_radius_km = 1e-12) {
+  RegularizedVariationalResult out{};
+  out.t = t0;
+  out.x = {s0.x, s0.y, s0.z, s0.vx, s0.vy, s0.vz};
+  out.phi.assign(36, 0.0);
+  for (int i = 0; i < 6; ++i) {
+    out.phi[static_cast<std::size_t>(i * 6 + i)] = 1.0;
+  }
+  if (!(min_radius_km > 0.0) || p0.size() != 36) {
+    out.status = IntegratorStatus::InvalidStepSize;
+    return out;
+  }
+  out.p = p0;
+
+  std::vector<double> y0(6 + 36 + 36, 0.0);
+  y0[0] = s0.x;
+  y0[1] = s0.y;
+  y0[2] = s0.z;
+  y0[3] = s0.vx;
+  y0[4] = s0.vy;
+  y0[5] = s0.vz;
+  for (int i = 0; i < 36; ++i) {
+    y0[6 + i] = out.phi[static_cast<std::size_t>(i)];
+    y0[6 + 36 + i] = p0[static_cast<std::size_t>(i)];
+  }
+
+  auto rhs = [&](double t, const std::vector<double>& y, std::vector<double>& dydt) {
+    dydt.assign(6 + 36 + 36, 0.0);
+    const TwoBody3DState s{y[0], y[1], y[2], y[3], y[4], y[5]};
+
+    std::array<double, 3> a{};
+    acceleration(t, s, a);
+    std::array<double, 9> ar{};
+    std::array<double, 9> av{};
+    if (!accel_jacobian_fn(t, s, ar, av)) {
+      std::fill(dydt.begin(), dydt.end(), std::numeric_limits<double>::quiet_NaN());
+      return;
+    }
+
+    ode::DynamicMatrix q;
+    if (!q_fn(t, s, q) || q.size() != 36) {
+      std::fill(dydt.begin(), dydt.end(), std::numeric_limits<double>::quiet_NaN());
+      return;
+    }
+
+    dydt[0] = y[3];
+    dydt[1] = y[4];
+    dydt[2] = y[5];
+    dydt[3] = a[0];
+    dydt[4] = a[1];
+    dydt[5] = a[2];
+
+    std::array<double, 36> amat{};
+    amat[3] = 1.0;
+    amat[10] = 1.0;
+    amat[17] = 1.0;
+    for (int j = 0; j < 3; ++j) {
+      amat[static_cast<std::size_t>(18 + j)] = ar[static_cast<std::size_t>(j)];
+      amat[static_cast<std::size_t>(24 + j)] = ar[static_cast<std::size_t>(3 + j)];
+      amat[static_cast<std::size_t>(30 + j)] = ar[static_cast<std::size_t>(6 + j)];
+      amat[static_cast<std::size_t>(21 + j)] = av[static_cast<std::size_t>(j)];
+      amat[static_cast<std::size_t>(27 + j)] = av[static_cast<std::size_t>(3 + j)];
+      amat[static_cast<std::size_t>(33 + j)] = av[static_cast<std::size_t>(6 + j)];
+    }
+
+    for (int i = 0; i < 6; ++i) {
+      for (int j = 0; j < 6; ++j) {
+        double sphi = 0.0;
+        for (int k = 0; k < 6; ++k) {
+          sphi += amat[static_cast<std::size_t>(i * 6 + k)] * y[6 + k * 6 + j];
+        }
+        dydt[6 + i * 6 + j] = sphi;
+      }
+    }
+
+    const int p_off = 6 + 36;
+    for (int i = 0; i < 6; ++i) {
+      for (int j = 0; j < 6; ++j) {
+        double ap = 0.0;
+        double pat = 0.0;
+        for (int k = 0; k < 6; ++k) {
+          ap += amat[static_cast<std::size_t>(i * 6 + k)] * y[p_off + k * 6 + j];
+          pat += y[p_off + i * 6 + k] * amat[static_cast<std::size_t>(j * 6 + k)];
+        }
+        dydt[p_off + i * 6 + j] = ap + pat + q[static_cast<std::size_t>(i * 6 + j)];
+      }
+    }
+  };
+
+  auto dt_ds = [min_radius_km](double, const std::vector<double>& y) {
+    const double r = std::sqrt(y[0] * y[0] + y[1] * y[1] + y[2] * y[2]);
+    return std::max(min_radius_km, r);
+  };
+
+  const auto res = ode::integrate_sundman(method, rhs, dt_ds, t0, y0, t1, opt);
+  out.status = res.status;
+  out.t = res.t;
+  out.stats = res.stats;
+  if (res.y.size() == y0.size()) {
+    out.x.assign(res.y.begin(), res.y.begin() + 6);
+    out.phi.assign(res.y.begin() + 6, res.y.begin() + 42);
+    out.p.assign(res.y.begin() + 42, res.y.end());
   }
   return out;
 }

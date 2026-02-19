@@ -180,6 +180,10 @@ if(ODE_BUILD_TESTS)
   target_link_libraries(ode_test_variational_multistep PRIVATE ode)
   add_test(NAME ode_test_variational_multistep COMMAND ode_test_variational_multistep)
 
+  add_executable(ode_test_regularized_variational tests/test_regularized_variational.cpp)
+  target_link_libraries(ode_test_regularized_variational PRIVATE ode)
+  add_test(NAME ode_test_regularized_variational COMMAND ode_test_regularized_variational)
+
   add_executable(ode_test_invariant_controller tests/test_invariant_controller.cpp)
   target_link_libraries(ode_test_invariant_controller PRIVATE ode)
   add_test(NAME ode_test_invariant_controller COMMAND ode_test_invariant_controller)
@@ -195,6 +199,7 @@ if(ODE_BUILD_TESTS)
   add_executable(ode_test_regularization tests/test_regularization.cpp)
   target_link_libraries(ode_test_regularization PRIVATE ode)
   add_test(NAME ode_test_regularization COMMAND ode_test_regularization)
+
 
   add_executable(ode_perf_benchmark tests/ode_perf_benchmark.cpp)
   target_link_libraries(ode_perf_benchmark PRIVATE ode $<$<TARGET_EXISTS:fmt::fmt>:fmt::fmt>)
