@@ -70,6 +70,26 @@ template <class RHS, class JacobianFn, class ProcessNoiseFn>
   return ode::uncertainty::propagate_covariance_discrete(phi, p0, qd, n);
 }
 
+[[nodiscard]] inline Matrix covariance_joseph_update(const Matrix& p_prior,
+                                                     const Matrix& k_gain,
+                                                     const Matrix& h_mat,
+                                                     const Matrix& r_meas,
+                                                     std::size_t n,
+                                                     std::size_t m) {
+  return ode::uncertainty::covariance_joseph_update(p_prior, k_gain, h_mat, r_meas, n, m);
+}
+
+[[nodiscard]] inline bool cholesky_lower(const Matrix& a, std::size_t n, Matrix& l_out) {
+  return ode::uncertainty::cholesky_lower(a, n, l_out);
+}
+
+[[nodiscard]] inline Matrix propagate_covariance_discrete_sqrt(const Matrix& phi,
+                                                               const Matrix& s0,
+                                                               const Matrix& qd,
+                                                               std::size_t n) {
+  return ode::uncertainty::propagate_covariance_discrete_sqrt(phi, s0, qd, n);
+}
+
 template <class RHS, class JacobianFn>
 [[nodiscard]] inline StateStmResult integrate_state_stm_abm4(RHS&& rhs,
                                                              JacobianFn&& jacobian_fn,

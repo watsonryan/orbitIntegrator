@@ -11,6 +11,7 @@
 
 #if __has_include(<Eigen/Core>)
 #include <Eigen/Core>
+#include <Eigen/Cholesky>
 #include <unsupported/Eigen/AutoDiff>
 #else
 #error "Eigen headers not found. Install Eigen >= 5 and/or enable ODE_FETCH_DEPS."
@@ -289,6 +290,35 @@ template <class RHS, class JacobianFn, class ProcessNoiseFn>
   return (phi * p0 * phi.transpose() + qd).eval();
 }
 
+[[nodiscard]] inline Matrix covariance_joseph_update(const Matrix& p_prior,
+                                                     const Matrix& k_gain,
+                                                     const Matrix& h_mat,
+                                                     const Matrix& r_meas) {
+  if (p_prior.rows() != p_prior.cols() || k_gain.rows() != p_prior.rows() || h_mat.cols() != p_prior.cols() ||
+      k_gain.cols() != h_mat.rows() || r_meas.rows() != r_meas.cols() || r_meas.rows() != h_mat.rows()) {
+    return Matrix{};
+  }
+  const Matrix i = Matrix::Identity(p_prior.rows(), p_prior.cols());
+  const Matrix a = (i - k_gain * h_mat).eval();
+  return (a * p_prior * a.transpose() + k_gain * r_meas * k_gain.transpose()).eval();
+}
+
+[[nodiscard]] inline Matrix propagate_covariance_discrete_sqrt(const Matrix& phi,
+                                                               const Matrix& s0,
+                                                               const Matrix& qd) {
+  if (phi.rows() != phi.cols() || s0.rows() != phi.rows() || s0.cols() != phi.cols() ||
+      qd.rows() != phi.rows() || qd.cols() != phi.cols()) {
+    return Matrix{};
+  }
+  const Matrix p0 = (s0 * s0.transpose()).eval();
+  const Matrix p1 = (phi * p0 * phi.transpose() + qd).eval();
+  Eigen::LLT<Matrix> llt(p1);
+  if (llt.info() != Eigen::Success) {
+    return Matrix{};
+  }
+  return llt.matrixL();
+}
+
 }  // namespace uncertainty
 
 namespace variational {
@@ -338,6 +368,19 @@ template <class RHS, class JacobianFn, class ProcessNoiseFn>
 
 [[nodiscard]] inline Matrix propagate_covariance_discrete(const Matrix& phi, const Matrix& p0, const Matrix& qd) {
   return uncertainty::propagate_covariance_discrete(phi, p0, qd);
+}
+
+[[nodiscard]] inline Matrix covariance_joseph_update(const Matrix& p_prior,
+                                                     const Matrix& k_gain,
+                                                     const Matrix& h_mat,
+                                                     const Matrix& r_meas) {
+  return uncertainty::covariance_joseph_update(p_prior, k_gain, h_mat, r_meas);
+}
+
+[[nodiscard]] inline Matrix propagate_covariance_discrete_sqrt(const Matrix& phi,
+                                                               const Matrix& s0,
+                                                               const Matrix& qd) {
+  return uncertainty::propagate_covariance_discrete_sqrt(phi, s0, qd);
 }
 }  // namespace variational
 }  // namespace ode::eigen

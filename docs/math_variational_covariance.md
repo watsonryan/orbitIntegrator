@@ -34,6 +34,15 @@ Discrete-time covariance update:
 
 where `Q_d` is integrated/discretized process noise over the step.
 
+Joseph-form measurement covariance update:
+
+`P^+ = (I - K H) P^- (I - K H)^T + K R K^T`
+
+Square-root propagation (Cholesky form):
+
+`P = S S^T`, propagate with
+`P_{k+1} = Phi P_k Phi^T + Q_d`, then refactor to `S_{k+1}`.
+
 ## AD Jacobian Support
 
 This repo provides forward-mode AD helpers to compute `A = df/dx` from a generic RHS, reducing manual Jacobian derivation burden.
@@ -45,10 +54,11 @@ Implemented verification includes:
 - Finite-difference trajectory perturbation vs STM-predicted perturbation
 - Covariance symmetry and PSD checks (small-dimensional regression cases)
 - Continuous-time covariance propagation vs one-step discrete approximation at small `dt`
+- Joseph-form symmetry/PSD validation checks
+- Square-root propagation consistency against direct covariance propagation
 
 ## API Namespaces
 
 - `ode::uncertainty::*`: original STM/covariance API
 - `ode::variational::*`: model-agnostic alias layer
 - `ode::eigen::uncertainty::*` / `ode::eigen::variational::*`: Eigen-first variants
-

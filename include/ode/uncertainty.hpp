@@ -4,6 +4,7 @@
  */
 #pragma once
 
+#include <algorithm>
 #include <cmath>
 #include <cstddef>
 #include <limits>
@@ -448,6 +449,170 @@ template <class RHS, class JacobianFn>
     }
   }
   return out;
+}
+
+/**
+ * @brief Joseph-form covariance measurement update.
+ *
+ * Computes:
+ * `P = (I - K H) P_prior (I - K H)^T + K R K^T`
+ *
+ * Shapes:
+ * - `P_prior`: n x n
+ * - `K`: n x m
+ * - `H`: m x n
+ * - `R`: m x m
+ */
+[[nodiscard]] inline DynamicMatrix covariance_joseph_update(const DynamicMatrix& p_prior,
+                                                            const DynamicMatrix& k_gain,
+                                                            const DynamicMatrix& h_mat,
+                                                            const DynamicMatrix& r_meas,
+                                                            std::size_t n,
+                                                            std::size_t m) {
+  if (p_prior.size() != n * n || k_gain.size() != n * m || h_mat.size() != m * n || r_meas.size() != m * m) {
+    return {};
+  }
+
+  auto idx_nm = [](std::size_t rows, std::size_t row, std::size_t col) {
+    return row * rows + col;
+  };
+  auto idx_rect = [](std::size_t cols, std::size_t row, std::size_t col) {
+    return row * cols + col;
+  };
+
+  DynamicMatrix kh(n * n, 0.0);
+  for (std::size_t i = 0; i < n; ++i) {
+    for (std::size_t j = 0; j < n; ++j) {
+      double s = 0.0;
+      for (std::size_t k = 0; k < m; ++k) {
+        s += k_gain[idx_rect(m, i, k)] * h_mat[idx_rect(n, k, j)];
+      }
+      kh[idx_nm(n, i, j)] = s;
+    }
+  }
+
+  DynamicMatrix i_m_kh(n * n, 0.0);
+  for (std::size_t i = 0; i < n; ++i) {
+    for (std::size_t j = 0; j < n; ++j) {
+      i_m_kh[idx_nm(n, i, j)] = (i == j ? 1.0 : 0.0) - kh[idx_nm(n, i, j)];
+    }
+  }
+
+  DynamicMatrix tmp;
+  DynamicMatrix a_p_at;
+  detail::matmul_nn(i_m_kh, p_prior, n, tmp);
+  detail::matmul_nt(tmp, i_m_kh, n, a_p_at);
+
+  DynamicMatrix kr(n * m, 0.0);
+  for (std::size_t i = 0; i < n; ++i) {
+    for (std::size_t j = 0; j < m; ++j) {
+      double s = 0.0;
+      for (std::size_t k = 0; k < m; ++k) {
+        s += k_gain[idx_rect(m, i, k)] * r_meas[idx_rect(m, k, j)];
+      }
+      kr[idx_rect(m, i, j)] = s;
+    }
+  }
+
+  DynamicMatrix k_r_kt(n * n, 0.0);
+  for (std::size_t i = 0; i < n; ++i) {
+    for (std::size_t j = 0; j < n; ++j) {
+      double s = 0.0;
+      for (std::size_t k = 0; k < m; ++k) {
+        s += kr[idx_rect(m, i, k)] * k_gain[idx_rect(m, j, k)];
+      }
+      k_r_kt[idx_nm(n, i, j)] = s;
+    }
+  }
+
+  DynamicMatrix out(n * n, 0.0);
+  for (std::size_t i = 0; i < n * n; ++i) {
+    out[i] = a_p_at[i] + k_r_kt[i];
+  }
+  return out;
+}
+
+/**
+ * @brief Compute lower-triangular Cholesky factor `L` where `A = L L^T`.
+ */
+[[nodiscard]] inline bool cholesky_lower(const DynamicMatrix& a, std::size_t n, DynamicMatrix& l_out) {
+  if (a.size() != n * n) {
+    return false;
+  }
+  for (double v : a) {
+    if (!std::isfinite(v)) {
+      return false;
+    }
+  }
+
+  const auto id = [n](std::size_t r, std::size_t c) { return r * n + c; };
+  DynamicMatrix l(n * n, 0.0);
+
+  double jitter = 0.0;
+  for (int attempt = 0; attempt < 6; ++attempt) {
+    std::fill(l.begin(), l.end(), 0.0);
+    bool ok = true;
+    for (std::size_t i = 0; i < n && ok; ++i) {
+      for (std::size_t j = 0; j <= i; ++j) {
+        double s = a[id(i, j)];
+        if (i == j) {
+          s += jitter;
+        }
+        for (std::size_t k = 0; k < j; ++k) {
+          s -= l[id(i, k)] * l[id(j, k)];
+        }
+        if (i == j) {
+          if (!(s > 0.0) || !std::isfinite(s)) {
+            ok = false;
+            break;
+          }
+          l[id(i, j)] = std::sqrt(s);
+        } else {
+          const double ljj = l[id(j, j)];
+          if (!(ljj > 0.0) || !std::isfinite(ljj)) {
+            ok = false;
+            break;
+          }
+          l[id(i, j)] = s / ljj;
+          if (!std::isfinite(l[id(i, j)])) {
+            ok = false;
+            break;
+          }
+        }
+      }
+    }
+    if (ok) {
+      l_out = std::move(l);
+      return true;
+    }
+    jitter = (jitter == 0.0) ? 1e-15 : jitter * 10.0;
+  }
+  return false;
+}
+
+/**
+ * @brief Discrete covariance propagation in square-root form.
+ *
+ * Returns lower-triangular `S1` such that:
+ * `S1 * S1^T = Phi * (S0*S0^T) * Phi^T + Qd`
+ */
+[[nodiscard]] inline DynamicMatrix propagate_covariance_discrete_sqrt(const DynamicMatrix& phi,
+                                                                      const DynamicMatrix& s0,
+                                                                      const DynamicMatrix& qd,
+                                                                      std::size_t n) {
+  if (phi.size() != n * n || s0.size() != n * n || qd.size() != n * n) {
+    return {};
+  }
+
+  DynamicMatrix p0;
+  detail::matmul_nt(s0, s0, n, p0);
+  DynamicMatrix p1 = propagate_covariance_discrete(phi, p0, qd, n);
+
+  DynamicMatrix s1;
+  if (!cholesky_lower(p1, n, s1)) {
+    return {};
+  }
+  return s1;
 }
 
 /**
