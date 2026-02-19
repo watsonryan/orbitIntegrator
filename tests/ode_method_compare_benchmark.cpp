@@ -6,6 +6,7 @@
 #include <string>
 #include <vector>
 
+#include "ode/logging.hpp"
 #include "ode/multistep/adams_bashforth_moulton.hpp"
 #include "ode/multistep/adams_high_order.hpp"
 #include "ode/multistep/nordsieck_abm4.hpp"
@@ -69,7 +70,7 @@ MethodMetrics RunRkf78(int total_runs, const State& y0) {
   for (int i = 0; i < total_runs; ++i) {
     const auto res = ode::integrate(ode::RKMethod::RKF78, rhs, kT0, y0, kT1, opt);
     if (res.status != ode::IntegratorStatus::Success) {
-      std::cerr << "RKF78 run failed\n";
+      ode::log::Error("RKF78 run failed, status=", ode::ToString(res.status));
       std::exit(1);
     }
     err_sum += std::abs(res.y[0] - ExactSolution(kT1));
@@ -103,7 +104,7 @@ MethodMetrics RunAbm4(int total_runs,
   for (int i = 0; i < total_runs; ++i) {
     const auto res = ode::multistep::integrate_abm4(rhs, kT0, y0, kT1, opt);
     if (res.status != ode::IntegratorStatus::Success) {
-      std::cerr << "ABM4 run failed\n";
+      ode::log::Error("ABM4 run failed, status=", ode::ToString(res.status));
       std::exit(1);
     }
     err_sum += std::abs(res.y[0] - ExactSolution(kT1));
@@ -133,7 +134,7 @@ MethodMetrics RunAbm6(int total_runs, const State& y0) {
   for (int i = 0; i < total_runs; ++i) {
     const auto res = ode::multistep::integrate_abm6(rhs, kT0, y0, kT1, opt);
     if (res.status != ode::IntegratorStatus::Success) {
-      std::cerr << "ABM6 run failed\n";
+      ode::log::Error("ABM6 run failed, status=", ode::ToString(res.status));
       std::exit(1);
     }
     err_sum += std::abs(res.y[0] - ExactSolution(kT1));
@@ -165,7 +166,7 @@ MethodMetrics RunNordsieckAbm4(int total_runs, const State& y0) {
   for (int i = 0; i < total_runs; ++i) {
     const auto res = ode::multistep::integrate_nordsieck_abm4(rhs, kT0, y0, kT1, opt);
     if (res.status != ode::IntegratorStatus::Success) {
-      std::cerr << "Nordsieck ABM4 run failed\n";
+      ode::log::Error("Nordsieck ABM4 run failed, status=", ode::ToString(res.status));
       std::exit(1);
     }
     err_sum += std::abs(res.y[0] - ExactSolution(kT1));
@@ -201,7 +202,7 @@ MethodMetrics RunSundmanRkf78(int total_runs, const State& y0) {
   for (int i = 0; i < total_runs; ++i) {
     const auto res = ode::integrate_sundman(ode::RKMethod::RKF78, rhs, dt_ds, kT0, y0, kT1, opt);
     if (res.status != ode::IntegratorStatus::Success) {
-      std::cerr << "Sundman RKF78 run failed\n";
+      ode::log::Error("Sundman RKF78 run failed, status=", ode::ToString(res.status));
       std::exit(1);
     }
     err_sum += std::abs(res.y[0] - ExactSolution(kT1));

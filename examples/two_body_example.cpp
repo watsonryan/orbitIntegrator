@@ -1,9 +1,8 @@
 #include <array>
 #include <cmath>
-#include <iomanip>
-#include <iostream>
 #include <numbers>
 
+#include "ode/logging.hpp"
 #include "ode/ode.hpp"
 
 int main() {
@@ -48,15 +47,14 @@ int main() {
 
   const auto res = ode::integrate(ode::RKMethod::RKF78, rhs, 0.0, y0, period_s, opt);
   if (res.status != ode::IntegratorStatus::Success) {
-    std::cerr << "integration failed\n";
+    ode::log::Error("integration failed, status=", ode::ToString(res.status));
     return 1;
   }
 
-  std::cout << std::setprecision(12);
-  std::cout << "Final state after ~1 orbit:\n";
-  std::cout << "r = [" << res.y[0] << ", " << res.y[1] << ", " << res.y[2] << "] km\n";
-  std::cout << "v = [" << res.y[3] << ", " << res.y[4] << ", " << res.y[5] << "] km/s\n";
-  std::cout << "accepted steps = " << res.stats.accepted_steps << " rejected = " << res.stats.rejected_steps << "\n";
+  ode::log::Info("Final state after ~1 orbit:");
+  ode::log::Info("r = [", res.y[0], ", ", res.y[1], ", ", res.y[2], "] km");
+  ode::log::Info("v = [", res.y[3], ", ", res.y[4], ", ", res.y[5], "] km/s");
+  ode::log::Info("accepted steps = ", res.stats.accepted_steps, " rejected = ", res.stats.rejected_steps);
 
   return 0;
 }

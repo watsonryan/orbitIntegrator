@@ -1,8 +1,8 @@
 #include <chrono>
 #include <cstdlib>
-#include <iostream>
 #include <vector>
 
+#include "ode/logging.hpp"
 #include "ode/ode.hpp"
 
 namespace {
@@ -44,7 +44,7 @@ int main() {
     for (int i = 0; i < iterations; ++i) {
       const auto res = ode::integrate(ode::RKMethod::RKF78, rhs, 0.0, y0, 10.0, opt);
       if (res.status != ode::IntegratorStatus::Success) {
-        std::cerr << "integration failed\n";
+        ode::log::Error("integration failed, status=", ode::ToString(res.status));
         return 1;
       }
       accepted += res.stats.accepted_steps;
@@ -54,9 +54,9 @@ int main() {
   const double sec = std::chrono::duration<double>(t1 - t0).count();
 
   const double runs = static_cast<double>(samples) * static_cast<double>(iterations);
-  std::cout << "runs=" << runs << " seconds=" << sec
-            << " runs_per_sec=" << (runs / sec)
-            << " avg_accepted_steps=" << (static_cast<double>(accepted) / runs)
-            << "\n";
+  ode::log::Info("runs=", runs,
+                 " seconds=", sec,
+                 " runs_per_sec=", (runs / sec),
+                 " avg_accepted_steps=", (static_cast<double>(accepted) / runs));
   return 0;
 }
