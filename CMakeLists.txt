@@ -65,6 +65,22 @@ if(ODE_BUILD_TESTS)
   target_link_libraries(ode_test_state_array PRIVATE ode)
   add_test(NAME ode_test_state_array COMMAND ode_test_state_array)
 
+  add_executable(ode_test_algebra_adapters tests/test_algebra_adapters.cpp)
+  target_link_libraries(ode_test_algebra_adapters PRIVATE ode)
+  add_test(NAME ode_test_algebra_adapters COMMAND ode_test_algebra_adapters)
+
+  add_executable(ode_test_dense_events tests/test_dense_events.cpp)
+  target_link_libraries(ode_test_dense_events PRIVATE ode)
+  add_test(NAME ode_test_dense_events COMMAND ode_test_dense_events)
+
+  add_executable(ode_test_stiff tests/test_stiff.cpp)
+  target_link_libraries(ode_test_stiff PRIVATE ode)
+  add_test(NAME ode_test_stiff COMMAND ode_test_stiff)
+
+  add_executable(ode_test_sundman tests/test_sundman.cpp)
+  target_link_libraries(ode_test_sundman PRIVATE ode)
+  add_test(NAME ode_test_sundman COMMAND ode_test_sundman)
+
   add_executable(ode_perf_benchmark tests/ode_perf_benchmark.cpp)
   target_link_libraries(ode_perf_benchmark PRIVATE ode)
 

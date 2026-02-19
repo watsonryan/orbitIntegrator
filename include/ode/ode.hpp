@@ -5,6 +5,7 @@
 #pragma once
 
 #include "ode/integrate_method.hpp"
+#include "ode/sundman.hpp"
 #include "ode/tableaus/rk4.hpp"
 #include "ode/tableaus/rkf45.hpp"
 #include "ode/tableaus/rkf78.hpp"
