@@ -60,6 +60,13 @@ flowchart LR
   B5 --> G3[Poincare tools]
   B5 --> G4[Chaos indicators]
 
+  G1 --> C1
+  G2 --> C1
+  G1 -. transforms time variable .-> C6
+  G2 -. wraps state mapping .-> C2
+  G1 --> H1
+  G2 --> H1
+
   C6 --> H1[Integrator result and stats]
   D6 --> H1
   E5 --> H1
