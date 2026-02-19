@@ -11,6 +11,8 @@ C++20 explicit Runge-Kutta integrator for non-stiff ODEs:
 - Dense output recording and simple event detection wrapper
 - Separate stiff module (`ode::stiff::integrate_implicit_euler`)
 - Separate multistep module (`ode::multistep::integrate_abm4`)
+- Higher-order Adams method (`ode::multistep::integrate_abm6`)
+- Nordsieck-style adaptive Adams (`ode::multistep::integrate_nordsieck_abm4`)
 
 ## Architecture
 
@@ -31,6 +33,8 @@ flowchart TD
   B --> M[Sundman wrapper]
   B --> N[Stiff module]
   B --> O[Multistep ABM4 module]
+  B --> P[Multistep ABM6 module]
+  B --> Q[Nordsieck adaptive ABM module]
 ```
 
 ## Build and test
@@ -148,6 +152,22 @@ ms_opt.corrector_iterations = 2;  // used when mode == Iterated
 auto ms_res = ode::multistep::integrate_abm4(rhs, t0, y0, t1, ms_opt);
 ```
 
+Higher-order ABM6:
+
+```cpp
+auto ms6_res = ode::multistep::integrate_abm6(rhs, t0, y0, t1, ms_opt);
+```
+
+Nordsieck-style adaptive Adams:
+
+```cpp
+#include <ode/multistep/nordsieck_abm4.hpp>
+ode::multistep::NordsieckAbmOptions nopt;
+nopt.rtol = 1e-8;
+nopt.atol = 1e-12;
+auto nres = ode::multistep::integrate_nordsieck_abm4(rhs, t0, y0, t1, nopt);
+```
+
 ## Simple 2-body orbital example
 
 Build and run:
@@ -185,6 +205,8 @@ This prints a side-by-side comparison for:
 - `ABM4-PEC`
 - `ABM4-PECE`
 - `ABM4-Iter2`
+- `ABM6-Iter2`
+- `Nordsieck-ABM4`
 - `Sundman+RKF78`
 
 Columns:
@@ -206,6 +228,7 @@ Optional overrides:
 - dense output + event handling
 - stiff module smoke/regression
 - multistep ABM4 regression/consistency checks
+- multistep ABM6 and Nordsieck regression checks
 - install/package-consumer smoke
 
 ## API docs (Doxygen)
