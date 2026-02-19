@@ -12,6 +12,7 @@ C++20 ODE integration toolkit with explicit RK, multistep, stiffness helpers, an
 - Uncertainty/variational propagation (`ode::uncertainty`) for STM and covariance
 - Forward-mode AD Jacobian helpers
 - Batch propagation helpers with reusable workspace (`ode::integrate_batch`)
+- Stiffness diagnostics helper (`ode::stiff::assess_stiffness`)
 - Eigen-first convenience API (`ode/eigen_api.hpp`, Eigen >= 5.0)
 
 ## Architecture
@@ -345,6 +346,14 @@ Optional overrides:
 - multistep ABM6 and Nordsieck regression checks
 - Gauss-Jackson second-order regression checks
 - canonical nonlinear ODE regression checks (Lorenz, Van der Pol, Kepler energy drift)
+- Richardson/order verification checks
+- reversibility consistency checks (forward/backward)
+- RK stability-region characterization checks
+- stiffness diagnostics checks
+- covariance symmetry/PSD and continuous-vs-discrete consistency checks
+- long-horizon orbital invariant checks (energy/angular momentum)
+- variational FD-vs-STM trajectory checks
+- dense-output accuracy regression checks
 - batch API regression checks
 - uncertainty STM/covariance + AD Jacobian regression checks
 - variational wrapper regression checks
