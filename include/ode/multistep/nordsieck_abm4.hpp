@@ -65,11 +65,17 @@ inline void accumulate_stats(IntegratorStats& dst, const IntegratorStats& src) {
   dst.last_h = src.last_h;
 }
 
-template <class State, class RHS, class Algebra = DefaultAlgebra<State>, class SegmentIntegrator>
+template <class State,
+          class RHS,
+          class Algebra = DefaultAlgebra<State>,
+          class HighSegmentIntegrator,
+          class LowSegmentIntegrator>
 requires AlgebraFor<Algebra, State>
 [[nodiscard]] IntegratorResult<State> integrate_nordsieck_adaptive_driver(
     RHS&& rhs,
-    SegmentIntegrator&& segment_integrator,
+    HighSegmentIntegrator&& high_segment_integrator,
+    LowSegmentIntegrator&& low_segment_integrator,
+    int error_order,
     double t0,
     const State& y0,
     double t1,
@@ -81,7 +87,7 @@ requires AlgebraFor<Algebra, State>
   auto& rhs_ref = rhs;
 
   if (opt.max_steps <= 0 || opt.max_restarts <= 0 || opt.segment_steps <= 0 || !(opt.h_min > 0.0) ||
-      !(opt.h_max >= opt.h_min) || !(opt.rtol > 0.0) || !(opt.atol > 0.0)) {
+      !(opt.h_max >= opt.h_min) || !(opt.rtol > 0.0) || !(opt.atol > 0.0) || error_order <= 0) {
     out.status = IntegratorStatus::InvalidStepSize;
     return out;
   }
@@ -115,57 +121,43 @@ requires AlgebraFor<Algebra, State>
     bool accepted = false;
     State accepted_state{};
     IntegratorStats accepted_stats{};
-    double accepted_err = std::numeric_limits<double>::infinity();
     bool have_fallback = false;
     State fallback_state{};
     IntegratorStats fallback_stats{};
 
     for (int restart = 0; restart < opt.max_restarts; ++restart) {
-      const auto coarse = segment_integrator(rhs_ref, out.t, out.y, t_seg_end, h_seg, opt, {});
+      const auto high = high_segment_integrator(rhs_ref, out.t, out.y, t_seg_end, h_seg, opt, {});
       out.stats.attempted_steps += 1;
-      if (coarse.status != IntegratorStatus::Success || !Algebra::finite(coarse.y)) {
+      if (high.status != IntegratorStatus::Success || !Algebra::finite(high.y)) {
         h = std::max(opt.h_min, 0.5 * std::abs(h_seg));
         out.stats.rejected_steps += 1;
         continue;
       }
 
-      const double h_half = 0.5 * h_seg;
-      const double t_mid = out.t + 0.5 * static_cast<double>(opt.segment_steps) * h_seg;
-
-      const auto fine_1 = segment_integrator(rhs_ref, out.t, out.y, t_mid, h_half, opt, {});
-      if (fine_1.status != IntegratorStatus::Success || !Algebra::finite(fine_1.y)) {
+      const auto low = low_segment_integrator(rhs_ref, out.t, out.y, t_seg_end, h_seg, opt, {});
+      if (low.status != IntegratorStatus::Success || !Algebra::finite(low.y)) {
         h = std::max(opt.h_min, 0.5 * std::abs(h_seg));
         out.stats.rejected_steps += 1;
         continue;
       }
-      const auto fine_2 = segment_integrator(rhs_ref, t_mid, fine_1.y, t_seg_end, h_half, opt, {});
-      if (fine_2.status != IntegratorStatus::Success || !Algebra::finite(fine_2.y)) {
-        h = std::max(opt.h_min, 0.5 * std::abs(h_seg));
-        out.stats.rejected_steps += 1;
-        continue;
-      }
-
-      const double err = normalized_error<State, Algebra>(coarse.y, fine_2.y, fine_2.y, opt.atol, opt.rtol);
+      const double err = normalized_error<State, Algebra>(low.y, high.y, high.y, opt.atol, opt.rtol);
       const bool ok = std::isfinite(err) && err <= 1.0;
-      const double fac_raw = opt.safety * std::pow(std::max(err, 1e-14), -1.0 / 5.0);
+      const double fac_raw = opt.safety * std::pow(std::max(err, 1e-14), -1.0 / static_cast<double>(error_order + 1));
       const double fac = std::clamp(fac_raw, opt.fac_min, opt.fac_max);
 
       if (std::isfinite(err)) {
         have_fallback = true;
-        fallback_state = fine_2.y;
+        fallback_state = high.y;
         fallback_stats = {};
-        accumulate_stats(fallback_stats, coarse.stats);
-        accumulate_stats(fallback_stats, fine_1.stats);
-        accumulate_stats(fallback_stats, fine_2.stats);
+        accumulate_stats(fallback_stats, high.stats);
+        accumulate_stats(fallback_stats, low.stats);
       }
 
       if (ok) {
         accepted = true;
-        accepted_state = fine_2.y;
-        accepted_err = err;
-        accumulate_stats(accepted_stats, coarse.stats);
-        accumulate_stats(accepted_stats, fine_1.stats);
-        accumulate_stats(accepted_stats, fine_2.stats);
+        accepted_state = high.y;
+        accumulate_stats(accepted_stats, high.stats);
+        accumulate_stats(accepted_stats, low.stats);
         h = std::clamp(std::abs(h_seg) * fac, opt.h_min, opt.h_max);
         break;
       }
@@ -182,7 +174,6 @@ requires AlgebraFor<Algebra, State>
       accepted = true;
       accepted_state = fallback_state;
       accepted_stats = fallback_stats;
-      accepted_err = 2.0;
       h = std::max(opt.h_min, 0.5 * std::abs(h_seg));
     }
 
@@ -196,8 +187,6 @@ requires AlgebraFor<Algebra, State>
       out.status = IntegratorStatus::UserStopped;
       return out;
     }
-
-    (void)accepted_err;
   }
 
   out.status = IntegratorStatus::MaxStepsExceeded;
@@ -215,13 +204,13 @@ requires AlgebraFor<Algebra, State>
     double t1,
     NordsieckAbmOptions opt,
     Observer<State> obs = {}) {
-  const auto segment_integrator = [](RHS& rhs_fn,
-                                     double ta,
-                                     const State& ya,
-                                     double tb,
-                                     double h_step,
-                                     const NordsieckAbmOptions& nopt,
-                                     Observer<State> o) {
+  const auto high_segment_integrator = [](RHS& rhs_fn,
+                                          double ta,
+                                          const State& ya,
+                                          double tb,
+                                          double h_step,
+                                          const NordsieckAbmOptions& nopt,
+                                          Observer<State> o) {
     AdamsBashforthMoultonOptions abm_opt{};
     abm_opt.h = std::abs(h_step);
     abm_opt.max_steps = std::max(1, nopt.segment_steps + 8);
@@ -229,8 +218,22 @@ requires AlgebraFor<Algebra, State>
     abm_opt.corrector_iterations = 2;
     return integrate_abm4<State, RHS, Algebra>(rhs_fn, ta, ya, tb, abm_opt, std::move(o));
   };
+  const auto low_segment_integrator = [](RHS& rhs_fn,
+                                         double ta,
+                                         const State& ya,
+                                         double tb,
+                                         double h_step,
+                                         const NordsieckAbmOptions& nopt,
+                                         Observer<State> o) {
+    AdamsBashforthMoultonOptions abm_opt{};
+    abm_opt.h = std::abs(h_step);
+    abm_opt.max_steps = std::max(1, nopt.segment_steps + 8);
+    abm_opt.mode = PredictorCorrectorMode::PECE;
+    abm_opt.corrector_iterations = 1;
+    return integrate_abm4<State, RHS, Algebra>(rhs_fn, ta, ya, tb, abm_opt, std::move(o));
+  };
   return detail::integrate_nordsieck_adaptive_driver<State, RHS, Algebra>(
-      std::forward<RHS>(rhs), segment_integrator, t0, y0, t1, opt, std::move(obs));
+      std::forward<RHS>(rhs), high_segment_integrator, low_segment_integrator, 4, t0, y0, t1, opt, std::move(obs));
 }
 
 template <class State, class RHS, class Algebra = DefaultAlgebra<State>>
@@ -242,13 +245,13 @@ requires AlgebraFor<Algebra, State>
     double t1,
     NordsieckAbmOptions opt,
     Observer<State> obs = {}) {
-  const auto segment_integrator = [](RHS& rhs_fn,
-                                     double ta,
-                                     const State& ya,
-                                     double tb,
-                                     double h_step,
-                                     const NordsieckAbmOptions& nopt,
-                                     Observer<State> o) {
+  const auto high_segment_integrator = [](RHS& rhs_fn,
+                                          double ta,
+                                          const State& ya,
+                                          double tb,
+                                          double h_step,
+                                          const NordsieckAbmOptions& nopt,
+                                          Observer<State> o) {
     AdamsBashforthMoultonOptions abm_opt{};
     abm_opt.h = std::abs(h_step);
     abm_opt.max_steps = std::max(1, nopt.segment_steps + 12);
@@ -256,8 +259,22 @@ requires AlgebraFor<Algebra, State>
     abm_opt.corrector_iterations = 2;
     return integrate_abm6<State, RHS, Algebra>(rhs_fn, ta, ya, tb, abm_opt, std::move(o));
   };
+  const auto low_segment_integrator = [](RHS& rhs_fn,
+                                         double ta,
+                                         const State& ya,
+                                         double tb,
+                                         double h_step,
+                                         const NordsieckAbmOptions& nopt,
+                                         Observer<State> o) {
+    AdamsBashforthMoultonOptions abm_opt{};
+    abm_opt.h = std::abs(h_step);
+    abm_opt.max_steps = std::max(1, nopt.segment_steps + 12);
+    abm_opt.mode = PredictorCorrectorMode::PECE;
+    abm_opt.corrector_iterations = 1;
+    return integrate_abm6<State, RHS, Algebra>(rhs_fn, ta, ya, tb, abm_opt, std::move(o));
+  };
   return detail::integrate_nordsieck_adaptive_driver<State, RHS, Algebra>(
-      std::forward<RHS>(rhs), segment_integrator, t0, y0, t1, opt, std::move(obs));
+      std::forward<RHS>(rhs), high_segment_integrator, low_segment_integrator, 6, t0, y0, t1, opt, std::move(obs));
 }
 
 }  // namespace ode::multistep

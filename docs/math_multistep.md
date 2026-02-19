@@ -33,7 +33,19 @@ Advantages:
 - natural step-size adaptation
 - robust high-order predictor/corrector updates
 
-The repo includes an adaptive Nordsieck ABM4-style implementation.
+The repo includes adaptive Nordsieck drivers for ABM4 and ABM6.
+
+### Defect-Based Local Error Estimation
+
+The adaptive Nordsieck drivers use a high/low predictor-corrector pair on
+the same segment:
+
+- high solution: iterated corrector (`Iterated`, 2 passes)
+- low solution: single-pass corrector (`PECE`)
+- error metric: normalized infinity norm of `(y_low - y_high)`
+
+This replaces split-step Richardson estimation in the adaptive multistep
+path and reduces RHS evaluations while preserving high accuracy for ABM6.
 
 ## Gauss-Jackson-Style Second-Order Integrator
 
@@ -54,4 +66,3 @@ This is suited to Cowell-type propagation where acceleration is modeled directly
 - Multistep methods require startup history from one-step methods.
 - They are sensitive to discontinuities and abrupt force changes.
 - For short final segments with nonuniform `h`, this repo falls back to one-step finishing updates.
-
