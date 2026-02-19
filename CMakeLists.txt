@@ -15,6 +15,8 @@ option(ODE_WERROR "Treat warnings as errors" OFF)
 option(ODE_ENABLE_ASAN "Enable AddressSanitizer" OFF)
 option(ODE_ENABLE_UBSAN "Enable UndefinedBehaviorSanitizer" OFF)
 
+include(cmake/dependencies.cmake)
+
 add_library(ode INTERFACE)
 add_library(ode::ode ALIAS ode)
 target_compile_features(ode INTERFACE cxx_std_20)
@@ -39,7 +41,7 @@ endif()
 
 if(ODE_BUILD_EXAMPLES)
   add_executable(ode_two_body_example examples/two_body_example.cpp)
-  target_link_libraries(ode_two_body_example PRIVATE ode)
+  target_link_libraries(ode_two_body_example PRIVATE ode $<$<TARGET_EXISTS:fmt::fmt>:fmt::fmt>)
 endif()
 
 if(ODE_BUILD_TESTS)
@@ -90,10 +92,10 @@ if(ODE_BUILD_TESTS)
   add_test(NAME ode_test_nordsieck COMMAND ode_test_nordsieck)
 
   add_executable(ode_perf_benchmark tests/ode_perf_benchmark.cpp)
-  target_link_libraries(ode_perf_benchmark PRIVATE ode)
+  target_link_libraries(ode_perf_benchmark PRIVATE ode $<$<TARGET_EXISTS:fmt::fmt>:fmt::fmt>)
 
   add_executable(ode_method_compare_benchmark tests/ode_method_compare_benchmark.cpp)
-  target_link_libraries(ode_method_compare_benchmark PRIVATE ode)
+  target_link_libraries(ode_method_compare_benchmark PRIVATE ode $<$<TARGET_EXISTS:fmt::fmt>:fmt::fmt>)
 
   add_test(
     NAME ode_package_install_smoke
