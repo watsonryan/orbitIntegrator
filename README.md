@@ -21,31 +21,48 @@ C++20 ODE integration toolkit with explicit RK, multistep, stiffness helpers, an
 ## Architecture
 
 ```mermaid
-flowchart TD
-  A[Client code] --> B[integrate API]
-  B --> C[Runtime method dispatch]
-  B --> D[Compile-time tableau API]
-  C --> E[Drivers]
-  D --> E
-  E --> F[ExplicitRKStepper]
-  F --> G[RK4 tableau]
-  F --> H[RKF45 tableau]
-  F --> I[RKF78 tableau]
-  E --> J[Error norm and step-size controller]
-  E --> K[Integration result and stats]
-  B --> L[Dense and event wrapper]
-  B --> M[Sundman wrapper]
-  B --> N[Stiff module]
-  B --> O[Multistep ABM4 module]
-  B --> P[Multistep ABM6 module]
-  B --> Q[Nordsieck adaptive ABM module]
-  B --> R[Uncertainty STM and covariance module]
-  B --> S[Eigen API wrappers]
-  B --> T[Batch propagation helpers]
-  B --> U[Variational aliases]
-  B --> V[Regularization module]
-  B --> W[Poincare and periodic-orbit tools]
-  B --> X[Chaos indicators]
+flowchart LR
+  A[Client apps and tests] --> B[Public headers]
+
+  B --> B1[ode.hpp runtime interface]
+  B --> B2[multistep headers]
+  B --> B3[variational and uncertainty]
+  B --> B4[eigen_api and batch]
+  B --> B5[regularization sundman poincare chaos]
+
+  B1 --> C1[Runtime RK dispatcher]
+  C1 --> C2[Explicit RK stepper core]
+  C2 --> C3[RK4 tableau]
+  C2 --> C4[RKF45 tableau]
+  C2 --> C5[RKF78 tableau]
+  C2 --> C6[Adaptive step controller]
+
+  B2 --> D1[ABM4 fixed step]
+  B2 --> D2[ABM6 fixed step]
+  B2 --> D3[Nordsieck adaptive ABM4]
+  B2 --> D4[Nordsieck adaptive ABM6]
+  B2 --> D5[Gauss Jackson second order]
+  D3 --> D6[Defect estimator high low ABM pair]
+  D4 --> D6
+
+  B3 --> E1[STM propagation]
+  B3 --> E2[Continuous covariance propagation]
+  B3 --> E3[Forward AD Jacobian]
+  E1 --> E4[State transition matrix Phi]
+  E2 --> E5[Riccati form with Q]
+
+  B4 --> F1[Eigen facade]
+  B4 --> F2[Batch propagation workspace]
+  B4 --> F3[Dense output and events]
+
+  B5 --> G1[Sundman transform]
+  B5 --> G2[Regularized Cowell variants]
+  B5 --> G3[Poincare tools]
+  B5 --> G4[Chaos indicators]
+
+  C6 --> H1[Integrator result and stats]
+  D6 --> H1
+  E5 --> H1
 ```
 
 ## Mathematical docs
