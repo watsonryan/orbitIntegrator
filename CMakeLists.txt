@@ -42,6 +42,8 @@ endif()
 if(ODE_BUILD_EXAMPLES)
   add_executable(ode_two_body_example examples/two_body_example.cpp)
   target_link_libraries(ode_two_body_example PRIVATE ode $<$<TARGET_EXISTS:fmt::fmt>:fmt::fmt>)
+  add_executable(ode_two_body_uncertainty_example examples/two_body_uncertainty_example.cpp)
+  target_link_libraries(ode_two_body_uncertainty_example PRIVATE ode $<$<TARGET_EXISTS:fmt::fmt>:fmt::fmt>)
 endif()
 
 if(ODE_BUILD_TESTS)

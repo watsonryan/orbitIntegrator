@@ -223,6 +223,15 @@ struct Dual {
   return out;
 }
 
+[[nodiscard]] inline Dual operator/(double a, const Dual& b) {
+  const double inv = 1.0 / b.val;
+  Dual out(a * inv, b.d.size());
+  for (std::size_t i = 0; i < out.d.size(); ++i) {
+    out.d[i] = -a * b.d[i] * inv * inv;
+  }
+  return out;
+}
+
 [[nodiscard]] inline Dual operator-(const Dual& a) {
   Dual out(-a.val, a.d.size());
   for (std::size_t i = 0; i < out.d.size(); ++i) {
