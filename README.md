@@ -42,6 +42,15 @@ flowchart TD
   B --> U[Variational aliases]
 ```
 
+## Mathematical docs
+
+- `docs/math_index.md`
+- `docs/math_runge_kutta.md`
+- `docs/math_multistep.md`
+- `docs/math_variational_covariance.md`
+- `docs/math_stiffness.md`
+- `docs/math_verification.md`
+
 ## Build and test
 
 ```bash
