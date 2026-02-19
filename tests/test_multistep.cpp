@@ -3,6 +3,7 @@
 #include <vector>
 
 #include "ode/multistep/adams_bashforth_moulton.hpp"
+#include "ode/logging.hpp"
 #include "ode/multistep/adams_high_order.hpp"
 #include "ode/ode.hpp"
 
@@ -23,14 +24,13 @@ int main() {
 
     const auto res = ode::multistep::integrate_abm4(rhs, 0.0, y0, 1.0, opt);
     if (res.status != ode::IntegratorStatus::Success) {
-      std::cerr << "ABM4 forward failed\n";
+      ode::log::Error("ABM4 forward failed");
       return 1;
     }
 
     const double err = std::abs(res.y[0] - std::exp(1.0));
     if (err > 1e-7) {
-      std::cerr << "ABM4 forward error too large: " << err << "\n";
-      return 1;
+      ode::log::Error("ABM4 forward error too large: ", err);      return 1;
     }
   }
 
@@ -46,15 +46,14 @@ int main() {
     const auto abm4 = ode::multistep::integrate_abm4(rhs, 0.0, y0, 1.0, abm4_opt);
     const auto abm6 = ode::multistep::integrate_abm6(rhs, 0.0, y0, 1.0, abm6_opt);
     if (abm4.status != ode::IntegratorStatus::Success || abm6.status != ode::IntegratorStatus::Success) {
-      std::cerr << "ABM4/ABM6 run failed\n";
+      ode::log::Error("ABM4/ABM6 run failed");
       return 1;
     }
     const double exact = std::exp(1.0);
     const double e4 = std::abs(abm4.y[0] - exact);
     const double e6 = std::abs(abm6.y[0] - exact);
     if (!(e6 < e4)) {
-      std::cerr << "Expected ABM6 to be more accurate than ABM4: e4=" << e4 << " e6=" << e6 << "\n";
-      return 1;
+      ode::log::Error("Expected ABM6 to be more accurate than ABM4: e4=", e4, " e6=", e6);      return 1;
     }
   }
 
@@ -67,14 +66,13 @@ int main() {
 
     const auto res = ode::multistep::integrate_abm4(rhs, 1.0, y1, 0.0, opt);
     if (res.status != ode::IntegratorStatus::Success) {
-      std::cerr << "ABM4 backward failed\n";
+      ode::log::Error("ABM4 backward failed");
       return 1;
     }
 
     const double err = std::abs(res.y[0] - 1.0);
     if (err > 1e-7) {
-      std::cerr << "ABM4 backward error too large: " << err << "\n";
-      return 1;
+      ode::log::Error("ABM4 backward error too large: ", err);      return 1;
     }
   }
 
@@ -94,13 +92,12 @@ int main() {
     const auto abm = ode::multistep::integrate_abm4(rhs, 0.0, y0, 1.0, ms_opt);
     const auto rk = ode::integrate(ode::RKMethod::RKF78, rhs, 0.0, y0, 1.0, rk_opt);
     if (abm.status != ode::IntegratorStatus::Success || rk.status != ode::IntegratorStatus::Success) {
-      std::cerr << "ABM/RK compare failed\n";
+      ode::log::Error("ABM/RK compare failed");
       return 1;
     }
 
     if (std::abs(abm.y[0] - rk.y[0]) > 5e-8) {
-      std::cerr << "ABM vs RK mismatch: " << abm.y[0] << " vs " << rk.y[0] << "\n";
-      return 1;
+      ode::log::Error("ABM vs RK mismatch: ", abm.y[0], " vs ", rk.y[0]);      return 1;
     }
   }
 
@@ -123,7 +120,7 @@ int main() {
     if (pec.status != ode::IntegratorStatus::Success ||
         pece.status != ode::IntegratorStatus::Success ||
         iter.status != ode::IntegratorStatus::Success) {
-      std::cerr << "ABM mode run failed\n";
+      ode::log::Error("ABM mode run failed");
       return 1;
     }
 
@@ -132,11 +129,11 @@ int main() {
     const double e_pece = std::abs(pece.y[0] - exact);
     const double e_iter = std::abs(iter.y[0] - exact);
     if (!(e_pece <= e_pec * 1.2)) {
-      std::cerr << "PECE should be at least as accurate as PEC in this case\n";
+      ode::log::Error("PECE should be at least as accurate as PEC in this case");
       return 1;
     }
     if (!(e_iter <= e_pece * 1.2)) {
-      std::cerr << "Iterated should be at least as accurate as PECE in this case\n";
+      ode::log::Error("Iterated should be at least as accurate as PECE in this case");
       return 1;
     }
   }

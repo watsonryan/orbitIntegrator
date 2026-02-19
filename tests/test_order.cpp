@@ -4,6 +4,7 @@
 #include <vector>
 
 #include "ode/ode.hpp"
+#include "ode/logging.hpp"
 
 namespace {
 
@@ -23,7 +24,7 @@ using State = std::vector<double>;
 
   const auto res = ode::integrate(method, rhs, 0.0, y0, 1.0, opt);
   if (res.status != ode::IntegratorStatus::Success) {
-    std::cerr << "fixed integration failed\n";
+    ode::log::Error("fixed integration failed");
     std::exit(1);
   }
   return std::abs(res.y[0] - std::exp(1.0));
@@ -35,7 +36,7 @@ using State = std::vector<double>;
 
 void expect_range(const char* label, const double value, const double lo, const double hi) {
   if (!(value > lo && value < hi)) {
-    std::cerr << label << " out of range: " << value << " expected in (" << lo << ", " << hi << ")\n";
+    ode::log::Error(label, " out of range: ", value, " expected in (", lo, ", ", hi, ")");
     std::exit(1);
   }
 }

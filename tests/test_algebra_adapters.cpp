@@ -4,6 +4,7 @@
 #include <utility>
 
 #include "ode/algebra_adapters.hpp"
+#include "ode/logging.hpp"
 #include "ode/ode.hpp"
 
 namespace {
@@ -51,11 +52,11 @@ int main() {
     const auto res = ode::integrate<State, decltype(rhs), ode::StdArrayAlgebra<2>>(
         ode::RKMethod::RKF78, std::move(rhs), 0.0, y0, t1, opt);
     if (res.status != ode::IntegratorStatus::Success) {
-      std::cerr << "StdArrayAlgebra integration failed\n";
+      ode::log::Error("StdArrayAlgebra integration failed");
       return 1;
     }
     if (std::abs(res.y[0] - 1.0) > 1e-9 || std::abs(res.y[1]) > 1e-9) {
-      std::cerr << "StdArrayAlgebra mismatch\n";
+      ode::log::Error("StdArrayAlgebra mismatch");
       return 1;
     }
   }
@@ -83,11 +84,11 @@ int main() {
     const auto res = ode::integrate<State, decltype(rhs), Algebra>(
         ode::RKMethod::RKF78, std::move(rhs), 0.0, y0, t1, opt);
     if (res.status != ode::IntegratorStatus::Success) {
-      std::cerr << "AccessorAlgebra integration failed\n";
+      ode::log::Error("AccessorAlgebra integration failed");
       return 1;
     }
     if (std::abs(res.y[0] - 1.0) > 1e-9 || std::abs(res.y[1]) > 1e-9) {
-      std::cerr << "AccessorAlgebra mismatch\n";
+      ode::log::Error("AccessorAlgebra mismatch");
       return 1;
     }
   }

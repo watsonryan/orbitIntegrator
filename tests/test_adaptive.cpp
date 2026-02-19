@@ -4,6 +4,7 @@
 #include <vector>
 
 #include "ode/ode.hpp"
+#include "ode/logging.hpp"
 
 namespace {
 
@@ -32,7 +33,7 @@ struct RunSummary {
 
   auto res = ode::integrate(method, rhs, 0.0, y0, 1.0, opt);
   if (res.status != ode::IntegratorStatus::Success) {
-    std::cerr << "adaptive integration failed\n";
+    ode::log::Error("adaptive integration failed");
     std::exit(1);
   }
 
@@ -41,8 +42,7 @@ struct RunSummary {
 
 void check_monotonic(const char* label, const double e1, const double e2, const double e3) {
   if (!(e2 < e1 && e3 < e2)) {
-    std::cerr << label << " error did not shrink monotonically: " << e1 << " " << e2 << " " << e3 << "\n";
-    std::exit(1);
+    ode::log::Error(label, " error did not shrink monotonically: ", e1, " ", e2, " ", e3);    std::exit(1);
   }
 }
 
@@ -55,7 +55,7 @@ int main() {
     const auto c = run(ode::RKMethod::RKF45, 1e-12);
     check_monotonic("RKF45", a.abs_err, b.abs_err, c.abs_err);
     if (c.result.stats.rejected_steps == 0) {
-      std::cerr << "RKF45 expected at least one rejected step for strict tolerance\n";
+      ode::log::Error("RKF45 expected at least one rejected step for strict tolerance");
       return 1;
     }
   }

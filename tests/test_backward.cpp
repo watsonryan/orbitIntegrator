@@ -4,6 +4,7 @@
 #include <vector>
 
 #include "ode/ode.hpp"
+#include "ode/logging.hpp"
 
 int main() {
   using State = std::vector<double>;
@@ -22,13 +23,12 @@ int main() {
 
   const auto res = ode::integrate(ode::RKMethod::RKF78, rhs, 1.0, y1, 0.0, opt);
   if (res.status != ode::IntegratorStatus::Success) {
-    std::cerr << "backward integration failed\n";
+    ode::log::Error("backward integration failed");
     return 1;
   }
 
   if (std::abs(res.y[0] - 1.0) > 1e-10) {
-    std::cerr << "backward result mismatch: " << res.y[0] << "\n";
-    return 1;
+    ode::log::Error("backward result mismatch: ", res.y[0]);    return 1;
   }
 
   return 0;

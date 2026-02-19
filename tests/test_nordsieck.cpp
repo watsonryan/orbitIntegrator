@@ -3,6 +3,7 @@
 #include <vector>
 
 #include "ode/multistep/nordsieck_abm4.hpp"
+#include "ode/logging.hpp"
 
 int main() {
   using State = std::vector<double>;
@@ -22,18 +23,17 @@ int main() {
 
   const auto res = ode::multistep::integrate_nordsieck_abm4(rhs, 0.0, y0, 1.0, opt);
   if (res.status != ode::IntegratorStatus::Success) {
-    std::cerr << "nordsieck integration failed\n";
+    ode::log::Error("nordsieck integration failed");
     return 1;
   }
 
   const double err = std::abs(res.y[0] - std::exp(1.0));
   if (err > 5e-5) {
-    std::cerr << "nordsieck error too large: " << err << "\n";
-    return 1;
+    ode::log::Error("nordsieck error too large: ", err);    return 1;
   }
 
   if (res.stats.accepted_steps <= 0 || res.stats.rhs_evals <= 0) {
-    std::cerr << "nordsieck stats invalid\n";
+    ode::log::Error("nordsieck stats invalid");
     return 1;
   }
 

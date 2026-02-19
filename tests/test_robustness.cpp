@@ -4,6 +4,7 @@
 #include <vector>
 
 #include "ode/ode.hpp"
+#include "ode/logging.hpp"
 
 int main() {
   using State = std::vector<double>;
@@ -20,7 +21,7 @@ int main() {
     opt.rtol = -1.0;
     const auto res = ode::integrate(ode::RKMethod::RKF45, rhs_good, 0.0, y0, 1.0, opt);
     if (res.status != ode::IntegratorStatus::InvalidTolerance) {
-      std::cerr << "expected InvalidTolerance\n";
+      ode::log::Error("expected InvalidTolerance");
       return 1;
     }
   }
@@ -31,7 +32,7 @@ int main() {
     opt.fixed_h = 0.0;
     const auto res = ode::integrate(ode::RKMethod::RK4, rhs_good, 0.0, y0, 1.0, opt);
     if (res.status != ode::IntegratorStatus::InvalidStepSize) {
-      std::cerr << "expected InvalidStepSize\n";
+      ode::log::Error("expected InvalidStepSize");
       return 1;
     }
   }
@@ -43,7 +44,7 @@ int main() {
     opt.max_steps = 3;
     const auto res = ode::integrate(ode::RKMethod::RK4, rhs_good, 0.0, y0, 1.0, opt);
     if (res.status != ode::IntegratorStatus::MaxStepsExceeded) {
-      std::cerr << "expected MaxStepsExceeded\n";
+      ode::log::Error("expected MaxStepsExceeded");
       return 1;
     }
   }
@@ -59,7 +60,7 @@ int main() {
     };
     const auto res = ode::integrate(ode::RKMethod::RK4, rhs_good, 0.0, y0, 1.0, opt, obs);
     if (res.status != ode::IntegratorStatus::UserStopped) {
-      std::cerr << "expected UserStopped\n";
+      ode::log::Error("expected UserStopped");
       return 1;
     }
   }
@@ -70,11 +71,11 @@ int main() {
     opt.fixed_h = 0.3;
     const auto res = ode::integrate(ode::RKMethod::RK4, rhs_good, 0.0, y0, 1.0, opt);
     if (res.status != ode::IntegratorStatus::Success) {
-      std::cerr << "expected Success for endpoint clamp\n";
+      ode::log::Error("expected Success for endpoint clamp");
       return 1;
     }
     if (std::abs(res.t - 1.0) > 1e-15) {
-      std::cerr << "expected exact endpoint hit\n";
+      ode::log::Error("expected exact endpoint hit");
       return 1;
     }
   }
@@ -88,11 +89,11 @@ int main() {
     opt.h_max = 0.05;
     const auto res = ode::integrate(ode::RKMethod::RKF45, rhs_good, 0.0, y0, 0.2, opt);
     if (res.status != ode::IntegratorStatus::Success) {
-      std::cerr << "expected Success for h_max cap case\n";
+      ode::log::Error("expected Success for h_max cap case");
       return 1;
     }
     if (std::abs(res.stats.last_h) > opt.h_max + 1e-15) {
-      std::cerr << "expected last_h <= h_max\n";
+      ode::log::Error("expected last_h <= h_max");
       return 1;
     }
   }
@@ -111,7 +112,7 @@ int main() {
     opt.h_max = 1.0;
     const auto res = ode::integrate(ode::RKMethod::RKF45, rhs_stiffish, 0.0, y0, 1.0, opt);
     if (res.status != ode::IntegratorStatus::StepSizeUnderflow) {
-      std::cerr << "expected StepSizeUnderflow\n";
+      ode::log::Error("expected StepSizeUnderflow");
       return 1;
     }
   }
@@ -132,7 +133,7 @@ int main() {
     opt.h_init = 0.1;
     const auto res = ode::integrate(ode::RKMethod::RKF45, rhs_nan, 0.0, y0, 1.0, opt);
     if (res.status != ode::IntegratorStatus::NaNDetected) {
-      std::cerr << "expected NaNDetected\n";
+      ode::log::Error("expected NaNDetected");
       return 1;
     }
   }

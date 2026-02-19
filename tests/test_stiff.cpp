@@ -3,6 +3,7 @@
 #include <vector>
 
 #include "ode/stiff/implicit_euler.hpp"
+#include "ode/logging.hpp"
 
 int main() {
   {
@@ -18,14 +19,13 @@ int main() {
 
     const auto res = ode::stiff::integrate_implicit_euler(rhs, 0.0, y0, 1.0, opt);
     if (res.status != ode::stiff::Status::Success) {
-      std::cerr << "stiff solver failed on linear test\n";
+      ode::log::Error("stiff solver failed on linear test");
       return 1;
     }
 
     const double exact = std::exp(-15.0);
     if (std::abs(res.y[0] - exact) > 2e-4) {
-      std::cerr << "linear stiff mismatch: " << res.y[0] << " vs " << exact << "\n";
-      return 1;
+      ode::log::Error("linear stiff mismatch: ", res.y[0], " vs ", exact);      return 1;
     }
   }
 
@@ -41,14 +41,13 @@ int main() {
 
     const auto res = ode::stiff::integrate_implicit_euler(rhs, 0.0, y0, 1.0, opt);
     if (res.status != ode::stiff::Status::Success) {
-      std::cerr << "stiff solver failed on forced test\n";
+      ode::log::Error("stiff solver failed on forced test");
       return 1;
     }
 
     const double exact = std::cos(1.0);
     if (std::abs(res.y[0] - exact) > 5e-2) {
-      std::cerr << "forced stiff mismatch: " << res.y[0] << " vs " << exact << "\n";
-      return 1;
+      ode::log::Error("forced stiff mismatch: ", res.y[0], " vs ", exact);      return 1;
     }
   }
 

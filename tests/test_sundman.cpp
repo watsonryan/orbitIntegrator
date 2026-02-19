@@ -3,6 +3,7 @@
 #include <vector>
 
 #include "ode/ode.hpp"
+#include "ode/logging.hpp"
 
 int main() {
   using State = std::vector<double>;
@@ -22,7 +23,7 @@ int main() {
 
   const auto ref = ode::integrate(ode::RKMethod::RKF78, rhs, 0.0, y0, 1.0, opt);
   if (ref.status != ode::IntegratorStatus::Success) {
-    std::cerr << "reference integration failed\n";
+    ode::log::Error("reference integration failed");
     return 1;
   }
 
@@ -30,25 +31,23 @@ int main() {
   auto dt_ds_const = [](double, const State&) { return 1.0; };
   const auto sund_const = ode::integrate_sundman(ode::RKMethod::RKF78, rhs, dt_ds_const, 0.0, y0, 1.0, opt);
   if (sund_const.status != ode::IntegratorStatus::Success) {
-    std::cerr << "sundman const integration failed\n";
+    ode::log::Error("sundman const integration failed");
     return 1;
   }
 
   if (std::abs(ref.y[0] - sund_const.y[0]) > 1e-9) {
-    std::cerr << "sundman const mismatch: ref=" << ref.y[0] << " sund=" << sund_const.y[0] << "\n";
-    return 1;
+    ode::log::Error("sundman const mismatch: ref=", ref.y[0], " sund=", sund_const.y[0]);    return 1;
   }
 
   // Non-constant positive dt/ds still reaches the same endpoint solution.
   auto dt_ds_var = [](double t, const State&) { return 0.5 + 0.5 * t; };
   const auto sund_var = ode::integrate_sundman(ode::RKMethod::RKF45, rhs, dt_ds_var, 0.0, y0, 1.0, opt);
   if (sund_var.status != ode::IntegratorStatus::Success) {
-    std::cerr << "sundman variable integration failed\n";
+    ode::log::Error("sundman variable integration failed");
     return 1;
   }
   if (std::abs(sund_var.y[0] - std::exp(1.0)) > 2e-6) {
-    std::cerr << "sundman variable mismatch: " << sund_var.y[0] << "\n";
-    return 1;
+    ode::log::Error("sundman variable mismatch: ", sund_var.y[0]);    return 1;
   }
 
   return 0;

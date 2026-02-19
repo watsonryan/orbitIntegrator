@@ -3,6 +3,7 @@
 #include <vector>
 
 #include "ode/ode.hpp"
+#include "ode/logging.hpp"
 
 namespace {
 
@@ -45,7 +46,7 @@ int TestLinearStateStmWithAutoDiff() {
   const auto res =
       ode::uncertainty::integrate_state_stm(ode::RKMethod::RKF78, dynamics, jac_ad, 0.0, x0, t1, opt);
   if (res.status != ode::IntegratorStatus::Success) {
-    std::cerr << "state/stm integration failed\n";
+    ode::log::Error("state/stm integration failed");
     return 1;
   }
 
@@ -59,11 +60,11 @@ int TestLinearStateStmWithAutoDiff() {
   auto absdiff = [](double a, double b) { return std::abs(a - b); };
   if (absdiff(res.phi[0], p11) > 1e-10 || absdiff(res.phi[1], p12) > 1e-10 ||
       absdiff(res.phi[2], p21) > 1e-10 || absdiff(res.phi[3], p22) > 1e-10) {
-    std::cerr << "stm mismatch\n";
+    ode::log::Error("stm mismatch");
     return 1;
   }
   if (absdiff(res.x[0], x_ref0) > 1e-10 || absdiff(res.x[1], x_ref1) > 1e-10) {
-    std::cerr << "state mismatch with analytic Phi*x0\n";
+    ode::log::Error("state mismatch with analytic Phi*x0");
     return 1;
   }
   return 0;
@@ -101,7 +102,7 @@ int TestContinuousCovariancePropagation() {
   const auto res = ode::uncertainty::integrate_state_stm_cov(
       ode::RKMethod::RKF78, dynamics, jac_zero, q_const, 0.0, x0, p0, t1, opt);
   if (res.status != ode::IntegratorStatus::Success) {
-    std::cerr << "state/stm/cov integration failed\n";
+    ode::log::Error("state/stm/cov integration failed");
     return 1;
   }
 
@@ -112,14 +113,13 @@ int TestContinuousCovariancePropagation() {
 
   if (std::abs(res.phi[0] - 1.0) > 1e-11 || std::abs(res.phi[1]) > 1e-11 ||
       std::abs(res.phi[2]) > 1e-11 || std::abs(res.phi[3] - 1.0) > 1e-11) {
-    std::cerr << "phi should remain identity for A=0\n";
+    ode::log::Error("phi should remain identity for A=0");
     return 1;
   }
 
   for (std::size_t i = 0; i < p_ref.size(); ++i) {
     if (std::abs(res.p[i] - p_ref[i]) > 1e-8) {
-      std::cerr << "covariance mismatch at i=" << i << "\n";
-      return 1;
+      ode::log::Error("covariance mismatch at i=", i);      return 1;
     }
   }
   return 0;
@@ -145,8 +145,7 @@ int TestDiscreteCovarianceStep() {
       9.0, 4.25};
   for (std::size_t i = 0; i < ref.size(); ++i) {
     if (std::abs(p1[i] - ref[i]) > 1e-12) {
-      std::cerr << "discrete covariance update mismatch at i=" << i << "\n";
-      return 1;
+      ode::log::Error("discrete covariance update mismatch at i=", i);      return 1;
     }
   }
   return 0;

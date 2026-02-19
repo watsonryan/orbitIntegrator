@@ -3,6 +3,7 @@
 #include <iostream>
 
 #include "ode/ode.hpp"
+#include "ode/logging.hpp"
 
 int main() {
   using State = std::array<double, 2>;  // x, v
@@ -22,13 +23,12 @@ int main() {
   const double t1 = 2.0 * 3.14159265358979323846;
   const auto res = ode::integrate(ode::RKMethod::RKF78, rhs, 0.0, y0, t1, opt);
   if (res.status != ode::IntegratorStatus::Success) {
-    std::cerr << "array state integration failed\n";
+    ode::log::Error("array state integration failed");
     return 1;
   }
 
   if (std::abs(res.y[0] - 1.0) > 1e-9 || std::abs(res.y[1]) > 1e-9) {
-    std::cerr << "array state final mismatch: x=" << res.y[0] << " v=" << res.y[1] << "\n";
-    return 1;
+    ode::log::Error("array state final mismatch: x=", res.y[0], " v=", res.y[1]);    return 1;
   }
 
   return 0;

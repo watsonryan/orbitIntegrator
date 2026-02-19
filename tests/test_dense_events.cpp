@@ -3,6 +3,7 @@
 #include <vector>
 
 #include "ode/dense_events.hpp"
+#include "ode/logging.hpp"
 
 int main() {
   using State = std::vector<double>;
@@ -30,26 +31,24 @@ int main() {
 
   const auto out = ode::integrate_with_dense_events(ode::RKMethod::RKF45, rhs, 0.0, y0, 1.0, opt, dense_opt, event_opt);
   if (out.integration.status != ode::IntegratorStatus::Success) {
-    std::cerr << "dense/event integration failed\n";
+    ode::log::Error("dense/event integration failed");
     return 1;
   }
   if (out.events.empty()) {
-    std::cerr << "expected at least one event\n";
+    ode::log::Error("expected at least one event");
     return 1;
   }
   if (std::abs(out.events.front().t - 0.5) > 1e-2) {
-    std::cerr << "event time mismatch: " << out.events.front().t << "\n";
-    return 1;
+    ode::log::Error("event time mismatch: ", out.events.front().t);    return 1;
   }
 
   State ys{};
   if (!out.dense.sample_linear(0.25, ys)) {
-    std::cerr << "sample_linear failed\n";
+    ode::log::Error("sample_linear failed");
     return 1;
   }
   if (std::abs(ys[0] - 0.25) > 2e-2) {
-    std::cerr << "dense sample mismatch: " << ys[0] << "\n";
-    return 1;
+    ode::log::Error("dense sample mismatch: ", ys[0]);    return 1;
   }
 
   return 0;
