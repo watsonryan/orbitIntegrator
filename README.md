@@ -143,7 +143,8 @@ Multistep Adams-Bashforth-Moulton example:
 #include <ode/multistep/adams_bashforth_moulton.hpp>
 ode::multistep::AdamsBashforthMoultonOptions ms_opt;
 ms_opt.h = 0.01;
-ms_opt.corrector_iterations = 2;
+ms_opt.mode = ode::multistep::PredictorCorrectorMode::PECE;  // PEC | PECE | Iterated
+ms_opt.corrector_iterations = 2;  // used when mode == Iterated
 auto ms_res = ode::multistep::integrate_abm4(rhs, t0, y0, t1, ms_opt);
 ```
 
@@ -181,7 +182,9 @@ cmake --build --preset macos-debug -j
 
 This prints a side-by-side comparison for:
 - `RKF78(adaptive)`
-- `ABM4(fixed)`
+- `ABM4-PEC`
+- `ABM4-PECE`
+- `ABM4-Iter2`
 - `Sundman+RKF78`
 
 Columns:
