@@ -46,4 +46,32 @@ requires AlgebraFor<Algebra, State>
   return fallback;
 }
 
+template <class State, class RHS, class InvariantFn, class Algebra = DefaultAlgebra<State>>
+requires AlgebraFor<Algebra, State>
+/** @brief Integrate with adaptive LTE plus invariant-drift control. */
+[[nodiscard]] IntegratorResult<State> integrate_invariant(RKMethod method,
+                                                           RHS&& rhs,
+                                                           InvariantFn&& invariant_fn,
+                                                           double t0,
+                                                           const State& y0,
+                                                           double t1,
+                                                           IntegratorOptions opt,
+                                                           Observer<State> obs = {}) {
+  switch (method) {
+    case RKMethod::RKF45:
+      return integrate_adaptive_invariant<TableauRKF45, State, RHS, InvariantFn, Algebra>(
+          std::forward<RHS>(rhs), std::forward<InvariantFn>(invariant_fn), t0, y0, t1, opt, obs);
+    case RKMethod::RKF78:
+      return integrate_adaptive_invariant<TableauRKF78, State, RHS, InvariantFn, Algebra>(
+          std::forward<RHS>(rhs), std::forward<InvariantFn>(invariant_fn), t0, y0, t1, opt, obs);
+    case RKMethod::RK4:
+    case RKMethod::RK8:
+      break;
+  }
+
+  IntegratorResult<State> fallback{};
+  fallback.status = IntegratorStatus::InvalidStepSize;
+  return fallback;
+}
+
 }  // namespace ode

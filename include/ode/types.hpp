@@ -33,6 +33,8 @@ struct IntegratorOptions {
   double safety = 0.9;
   double fac_min = 0.2;
   double fac_max = 5.0;
+  // Optional invariant drift bound for invariant-aware adaptive control APIs.
+  double invariant_rtol = 0.0;
 
   bool allow_step_reject = true;
 };
@@ -77,6 +79,7 @@ struct IntegratorStats {
   long long rhs_evals = 0;
   double last_h = 0.0;
   double last_error_norm = 0.0;
+  double last_invariant_error = 0.0;
 };
 
 /** @brief Generic integration result payload. */

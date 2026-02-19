@@ -285,4 +285,149 @@ requires AlgebraFor<Algebra, State>
   return out;
 }
 
+template <class Tableau, class State, class RHS, class InvariantFn, class Algebra = DefaultAlgebra<State>>
+requires AlgebraFor<Algebra, State>
+/** @brief Integrate with adaptive LTE control plus invariant-drift acceptance constraints. */
+[[nodiscard]] IntegratorResult<State> integrate_adaptive_invariant(RHS&& rhs,
+                                                                   InvariantFn&& invariant_fn,
+                                                                   double t0,
+                                                                   const State& y0,
+                                                                   double t1,
+                                                                   const IntegratorOptions& opt,
+                                                                   const Observer<State>& obs = {}) {
+  IntegratorResult<State> out{};
+  out.t = t0;
+  out.y = y0;
+
+  if constexpr (!Tableau::has_embedded) {
+    out.status = IntegratorStatus::InvalidStepSize;
+    return out;
+  }
+
+  if (!(opt.rtol > 0.0) || !(opt.atol > 0.0) || !std::isfinite(opt.rtol) || !std::isfinite(opt.atol) ||
+      !(opt.invariant_rtol > 0.0) || !std::isfinite(opt.invariant_rtol)) {
+    out.status = IntegratorStatus::InvalidTolerance;
+    return out;
+  }
+  if (!(opt.h_min > 0.0) || !(opt.h_max >= opt.h_min) || !std::isfinite(opt.h_min) || !std::isfinite(opt.h_max)) {
+    out.status = IntegratorStatus::InvalidStepSize;
+    return out;
+  }
+  if (opt.max_steps <= 0) {
+    out.status = IntegratorStatus::MaxStepsExceeded;
+    return out;
+  }
+
+  const int dir = detail::sign(t1 - t0);
+  if (dir == 0) {
+    return out;
+  }
+
+  const double span = std::abs(t1 - t0);
+  double h = 0.0;
+  if (opt.h_init > 0.0 && std::isfinite(opt.h_init)) {
+    h = detail::clamp_abs_signed(static_cast<double>(dir) * opt.h_init, opt.h_min, opt.h_max, dir);
+  } else {
+    h = detail::estimate_initial_step<State, RHS, Algebra>(std::forward<RHS>(rhs),
+                                                           t0, y0, t1, opt.atol, opt.rtol,
+                                                           opt.h_min, opt.h_max, dir);
+  }
+  if (!(std::abs(h) > 0.0) || !std::isfinite(h) || span == 0.0) {
+    h = static_cast<double>(dir) * opt.h_min;
+  }
+
+  const double invariant_init = invariant_fn(y0);
+  if (!std::isfinite(invariant_init)) {
+    out.status = IntegratorStatus::InvalidTolerance;
+    return out;
+  }
+  const double invariant_global_scale = std::max(1.0, std::abs(invariant_init));
+
+  InvariantStepSizeController controller{opt.safety, opt.fac_min, opt.fac_max, opt.safety};
+  ExplicitRKStepper<Tableau, State, Algebra> stepper(y0);
+  State y_high{};
+  State err{};
+  Algebra::resize_like(y_high, y0);
+  Algebra::resize_like(err, y0);
+
+  for (int step = 0; step < opt.max_steps; ++step) {
+    if (out.t == t1) {
+      out.status = IntegratorStatus::Success;
+      return out;
+    }
+
+    const double remaining = t1 - out.t;
+    if (detail::sign(remaining) != dir) {
+      out.status = IntegratorStatus::Success;
+      return out;
+    }
+    if (std::abs(h) > std::abs(remaining)) {
+      h = remaining;
+    }
+
+    out.stats.attempted_steps += 1;
+    const bool ok = stepper.step(rhs, out.t, out.y, h, y_high, &err);
+    out.stats.rhs_evals += Tableau::stages;
+    if (!ok || !Algebra::finite(y_high) || !Algebra::finite(err)) {
+      out.status = IntegratorStatus::NaNDetected;
+      return out;
+    }
+
+    const double err_norm = weighted_rms_error<State, Algebra>(err, out.y, y_high, opt.atol, opt.rtol);
+    out.stats.last_h = h;
+    out.stats.last_error_norm = err_norm;
+    if (!std::isfinite(err_norm)) {
+      out.status = IntegratorStatus::NaNDetected;
+      return out;
+    }
+
+    const double invariant_current = invariant_fn(out.y);
+    const double invariant_next = invariant_fn(y_high);
+    if (!std::isfinite(invariant_current) || !std::isfinite(invariant_next)) {
+      out.status = IntegratorStatus::NaNDetected;
+      return out;
+    }
+    const double invariant_step_scale = std::max(1.0, std::abs(invariant_current));
+    const double invariant_step_rel = std::abs(invariant_next - invariant_current) / invariant_step_scale;
+    out.stats.last_invariant_error = std::abs(invariant_next - invariant_init) / invariant_global_scale;
+    const double invariant_norm = invariant_step_rel / opt.invariant_rtol;
+
+    const bool accept = (err_norm <= 1.0) && (invariant_norm <= 1.0);
+    if (accept) {
+      out.t += h;
+      Algebra::assign(out.y, y_high);
+      out.stats.accepted_steps += 1;
+      if (!detail::call_observer(obs, out.t, out.y)) {
+        out.status = IntegratorStatus::UserStopped;
+        return out;
+      }
+    } else {
+      out.stats.rejected_steps += 1;
+      if (!opt.allow_step_reject) {
+        out.status = IntegratorStatus::InvalidStepSize;
+        return out;
+      }
+    }
+
+    const double h_new = controller.propose(
+        h,
+        (err_norm > 0.0 ? err_norm : std::numeric_limits<double>::min()),
+        (invariant_norm > 0.0 ? invariant_norm : std::numeric_limits<double>::min()),
+        Tableau::order_high);
+    if (!std::isfinite(h_new) || std::abs(h_new) < opt.h_min) {
+      out.status = IntegratorStatus::StepSizeUnderflow;
+      return out;
+    }
+
+    h = detail::clamp_abs_signed(h_new, opt.h_min, opt.h_max, dir);
+    if (std::abs(h) < opt.h_min) {
+      out.status = IntegratorStatus::StepSizeUnderflow;
+      return out;
+    }
+  }
+
+  out.status = IntegratorStatus::MaxStepsExceeded;
+  return out;
+}
+
 }  // namespace ode
