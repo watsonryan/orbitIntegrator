@@ -51,6 +51,23 @@ struct RegularizationResult3D {
   IntegratorStats stats{};
 };
 
+[[nodiscard]] inline bool solve2x2(double a11,
+                                   double a12,
+                                   double a21,
+                                   double a22,
+                                   double b1,
+                                   double b2,
+                                   double& x1,
+                                   double& x2) {
+  const double det = a11 * a22 - a12 * a21;
+  if (std::abs(det) < 1e-18 || !std::isfinite(det)) {
+    return false;
+  }
+  x1 = (b1 * a22 - b2 * a12) / det;
+  x2 = (a11 * b2 - a21 * b1) / det;
+  return std::isfinite(x1) && std::isfinite(x2);
+}
+
 [[nodiscard]] inline double radius(const TwoBody2DState& s) {
   return std::sqrt(s.x * s.x + s.y * s.y);
 }
@@ -295,6 +312,154 @@ template <class Accel2DFn>
   if (res.y.size() == 4) {
     out.state = {res.y[0], res.y[1], res.y[2], res.y[3]};
   }
+  return out;
+}
+
+template <class Accel2DFn>
+[[nodiscard]] inline RegularizationResult integrate_cowell_levi_civita_2d(
+    Accel2DFn&& acceleration,
+    double t0,
+    const TwoBody2DState& s0,
+    double t1,
+    RegularizationOptions opt) {
+  RegularizationResult out{};
+  out.t = t0;
+  out.state = s0;
+
+  if (!(opt.ds > 0.0) || !std::isfinite(opt.ds) || opt.max_steps <= 0 || !(opt.min_radius_km > 0.0)) {
+    out.status = IntegratorStatus::InvalidStepSize;
+    return out;
+  }
+
+  const int dir = (t1 > t0) - (t1 < t0);
+  if (dir == 0) {
+    return out;
+  }
+  const double ds_nominal = static_cast<double>(dir) * opt.ds;
+
+  std::array<double, 2> u{}, up{};
+  if (!to_levi_civita(s0, u, up)) {
+    out.status = IntegratorStatus::InvalidStepSize;
+    return out;
+  }
+
+  // z = [u1,u2,up1,up2,t]
+  std::array<double, 5> z{u[0], u[1], up[0], up[1], t0};
+  std::array<double, 5> k1{}, k2{}, k3{}, k4{}, zt{};
+
+  auto rhs = [&](const std::array<double, 5>& in, std::array<double, 5>& dzds) -> bool {
+    const std::array<double, 2> uu{in[0], in[1]};
+    const std::array<double, 2> uup{in[2], in[3]};
+    TwoBody2DState s{};
+    if (!from_levi_civita(uu, uup, s)) {
+      return false;
+    }
+
+    const double r = std::max(opt.min_radius_km, radius(s));
+    const double vdotr = s.x * s.vx + s.y * s.vy;  // dr/ds scalar
+    std::array<double, 2> a{};
+    acceleration(in[4], s, a);
+    if (!std::isfinite(a[0]) || !std::isfinite(a[1])) {
+      return false;
+    }
+
+    const double rddx = vdotr * s.vx + r * r * a[0];
+    const double rddy = vdotr * s.vy + r * r * a[1];
+
+    // J(u) u'' = r'' - h(u,u')
+    const double j11 = 2.0 * in[0];
+    const double j12 = -2.0 * in[1];
+    const double j21 = 2.0 * in[1];
+    const double j22 = 2.0 * in[0];
+    const double b1 = rddx - 2.0 * (in[2] * in[2] - in[3] * in[3]);
+    const double b2 = rddy - 4.0 * in[2] * in[3];
+
+    double upp1 = 0.0;
+    double upp2 = 0.0;
+    if (!solve2x2(j11, j12, j21, j22, b1, b2, upp1, upp2)) {
+      return false;
+    }
+
+    dzds[0] = in[2];
+    dzds[1] = in[3];
+    dzds[2] = upp1;
+    dzds[3] = upp2;
+    dzds[4] = r;
+    return std::isfinite(dzds[0]) && std::isfinite(dzds[1]) &&
+           std::isfinite(dzds[2]) && std::isfinite(dzds[3]) && std::isfinite(dzds[4]);
+  };
+
+  for (int step = 0; step < opt.max_steps; ++step) {
+    const double rem = t1 - z[4];
+    if ((dir > 0 && rem <= 0.0) || (dir < 0 && rem >= 0.0)) {
+      TwoBody2DState s{};
+      if (!from_levi_civita({z[0], z[1]}, {z[2], z[3]}, s)) {
+        out.status = IntegratorStatus::NaNDetected;
+        return out;
+      }
+      out.t = z[4];
+      out.state = s;
+      out.status = IntegratorStatus::Success;
+      return out;
+    }
+
+    const TwoBody2DState s_now = [&]() {
+      TwoBody2DState s{};
+      (void)from_levi_civita({z[0], z[1]}, {z[2], z[3]}, s);
+      return s;
+    }();
+    const double r = std::max(opt.min_radius_km, radius(s_now));
+    double ds = ds_nominal;
+    const double ds_from_time = rem / r;
+    if (std::abs(ds) > std::abs(ds_from_time)) {
+      ds = ds_from_time;
+    }
+    if (!(std::abs(ds) > 0.0) || !std::isfinite(ds)) {
+      out.status = IntegratorStatus::StepSizeUnderflow;
+      return out;
+    }
+
+    out.stats.attempted_steps += 1;
+    out.stats.last_h = ds * r;
+
+    if (!rhs(z, k1)) {
+      out.status = IntegratorStatus::NaNDetected;
+      return out;
+    }
+    for (int i = 0; i < 5; ++i) {
+      zt[i] = z[i] + 0.5 * ds * k1[i];
+    }
+    if (!rhs(zt, k2)) {
+      out.status = IntegratorStatus::NaNDetected;
+      return out;
+    }
+    for (int i = 0; i < 5; ++i) {
+      zt[i] = z[i] + 0.5 * ds * k2[i];
+    }
+    if (!rhs(zt, k3)) {
+      out.status = IntegratorStatus::NaNDetected;
+      return out;
+    }
+    for (int i = 0; i < 5; ++i) {
+      zt[i] = z[i] + ds * k3[i];
+    }
+    if (!rhs(zt, k4)) {
+      out.status = IntegratorStatus::NaNDetected;
+      return out;
+    }
+
+    for (int i = 0; i < 5; ++i) {
+      z[i] += (ds / 6.0) * (k1[i] + 2.0 * k2[i] + 2.0 * k3[i] + k4[i]);
+      if (!std::isfinite(z[i])) {
+        out.status = IntegratorStatus::NaNDetected;
+        return out;
+      }
+    }
+    out.stats.accepted_steps += 1;
+    out.stats.rhs_evals += 4;
+  }
+
+  out.status = IntegratorStatus::MaxStepsExceeded;
   return out;
 }
 
