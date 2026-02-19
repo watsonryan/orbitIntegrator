@@ -290,4 +290,54 @@ template <class RHS, class JacobianFn, class ProcessNoiseFn>
 }
 
 }  // namespace uncertainty
+
+namespace variational {
+using StateStmResult = uncertainty::StateStmResult;
+using StateStmCovResult = uncertainty::StateStmCovResult;
+
+template <class Dynamics>
+[[nodiscard]] inline bool jacobian_forward_ad(Dynamics&& dynamics, double t, const Vector& x, Matrix& a_out) {
+  return uncertainty::jacobian_forward_ad(std::forward<Dynamics>(dynamics), t, x, a_out);
+}
+
+template <class RHS, class JacobianFn>
+[[nodiscard]] inline StateStmResult integrate_state_stm(RKMethod method,
+                                                        RHS&& rhs,
+                                                        JacobianFn&& jacobian_fn,
+                                                        double t0,
+                                                        const Vector& x0,
+                                                        double t1,
+                                                        IntegratorOptions opt,
+                                                        Observer<Vector> obs = {}) {
+  return uncertainty::integrate_state_stm(
+      method, std::forward<RHS>(rhs), std::forward<JacobianFn>(jacobian_fn), t0, x0, t1, opt, obs);
+}
+
+template <class RHS, class JacobianFn, class ProcessNoiseFn>
+[[nodiscard]] inline StateStmCovResult integrate_state_stm_cov(RKMethod method,
+                                                               RHS&& rhs,
+                                                               JacobianFn&& jacobian_fn,
+                                                               ProcessNoiseFn&& q_fn,
+                                                               double t0,
+                                                               const Vector& x0,
+                                                               const Matrix& p0,
+                                                               double t1,
+                                                               IntegratorOptions opt,
+                                                               Observer<Vector> obs = {}) {
+  return uncertainty::integrate_state_stm_cov(method,
+                                              std::forward<RHS>(rhs),
+                                              std::forward<JacobianFn>(jacobian_fn),
+                                              std::forward<ProcessNoiseFn>(q_fn),
+                                              t0,
+                                              x0,
+                                              p0,
+                                              t1,
+                                              opt,
+                                              obs);
+}
+
+[[nodiscard]] inline Matrix propagate_covariance_discrete(const Matrix& phi, const Matrix& p0, const Matrix& qd) {
+  return uncertainty::propagate_covariance_discrete(phi, p0, qd);
+}
+}  // namespace variational
 }  // namespace ode::eigen
