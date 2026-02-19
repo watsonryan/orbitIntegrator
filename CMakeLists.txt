@@ -35,4 +35,8 @@ if(ODE_BUILD_TESTS)
   add_executable(ode_test_backward tests/test_backward.cpp)
   target_link_libraries(ode_test_backward PRIVATE ode)
   add_test(NAME ode_test_backward COMMAND ode_test_backward)
+
+  add_executable(ode_test_robustness tests/test_robustness.cpp)
+  target_link_libraries(ode_test_robustness PRIVATE ode)
+  add_test(NAME ode_test_robustness COMMAND ode_test_robustness)
 endif()
