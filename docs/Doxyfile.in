@@ -1,0 +1,15 @@
+PROJECT_NAME           = "orbitIntegrator"
+PROJECT_NUMBER         = "@PROJECT_VERSION@"
+OUTPUT_DIRECTORY       = "@CMAKE_CURRENT_BINARY_DIR@/docs"
+CREATE_SUBDIRS         = NO
+OUTPUT_LANGUAGE        = English
+GENERATE_HTML          = YES
+GENERATE_LATEX         = NO
+RECURSIVE              = YES
+QUIET                  = YES
+INPUT                  = "@CMAKE_CURRENT_SOURCE_DIR@/include"
+FILE_PATTERNS          = *.hpp
+EXTRACT_ALL            = YES
+EXTRACT_PRIVATE        = NO
+EXTRACT_STATIC         = NO
+WARN_IF_UNDOCUMENTED   = NO

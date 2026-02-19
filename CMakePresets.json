@@ -23,6 +23,22 @@
         "CMAKE_BUILD_TYPE": "Release",
         "ODE_BUILD_TESTS": "ON"
       }
+    },
+    {
+      "name": "macos-asan",
+      "inherits": "macos-debug",
+      "binaryDir": "${sourceDir}/build/macos-asan",
+      "cacheVariables": {
+        "ODE_ENABLE_ASAN": "ON"
+      }
+    },
+    {
+      "name": "macos-ubsan",
+      "inherits": "macos-debug",
+      "binaryDir": "${sourceDir}/build/macos-ubsan",
+      "cacheVariables": {
+        "ODE_ENABLE_UBSAN": "ON"
+      }
     }
   ],
   "buildPresets": [
@@ -33,12 +49,34 @@
     {
       "name": "macos-release",
       "configurePreset": "macos-release"
+    },
+    {
+      "name": "macos-asan",
+      "configurePreset": "macos-asan"
+    },
+    {
+      "name": "macos-ubsan",
+      "configurePreset": "macos-ubsan"
     }
   ],
   "testPresets": [
     {
       "name": "macos-debug",
       "configurePreset": "macos-debug",
+      "output": {
+        "outputOnFailure": true
+      }
+    },
+    {
+      "name": "macos-asan",
+      "configurePreset": "macos-asan",
+      "output": {
+        "outputOnFailure": true
+      }
+    },
+    {
+      "name": "macos-ubsan",
+      "configurePreset": "macos-ubsan",
       "output": {
         "outputOnFailure": true
       }
