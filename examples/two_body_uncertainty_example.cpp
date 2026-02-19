@@ -1,9 +1,8 @@
 #include <cmath>
-#include <iomanip>
-#include <iostream>
 #include <numbers>
 #include <vector>
 
+#include "ode/logging.hpp"
 #include "ode/ode.hpp"
 
 namespace {
@@ -83,7 +82,7 @@ int main() {
       ode::RKMethod::RKF78, TwoBodyRhs<double>, jac_ad, q_zero, 0.0, x0, p0, period_s, opt);
 
   if (out.status != ode::IntegratorStatus::Success) {
-    std::cerr << "integration failed, status=" << ode::ToString(out.status) << "\n";
+    ode::log::Error("integration failed, status=", ode::ToString(out.status));
     return 1;
   }
 
@@ -103,20 +102,17 @@ int main() {
     p_diff[i] = out.p[i] - p_final_discrete[i];
   }
 
-  std::cout << std::setprecision(12);
-  std::cout << "Two-body uncertainty propagation complete\n";
-  std::cout << "status: " << ode::ToString(out.status) << "\n";
-  std::cout << "t_final [s]: " << out.t << " (period ~ " << period_s << ")\n";
-  std::cout << "state_final [km, km/s]:\n";
-  std::cout << "  r = [" << out.x[0] << ", " << out.x[1] << ", " << out.x[2] << "]\n";
-  std::cout << "  v = [" << out.x[3] << ", " << out.x[4] << ", " << out.x[5] << "]\n";
-  std::cout << "STM first row: [" << out.phi[idx(6, 0, 0)] << ", " << out.phi[idx(6, 0, 1)] << ", "
-            << out.phi[idx(6, 0, 2)] << ", " << out.phi[idx(6, 0, 3)] << ", " << out.phi[idx(6, 0, 4)] << ", "
-            << out.phi[idx(6, 0, 5)] << "]\n";
-  std::cout << "||Phi - I||_inf: " << MatrixInfNorm(i_minus_phi, 6) << "\n";
-  std::cout << "continuous-vs-discrete covariance consistency (Q=0): ||P - Phi*P0*Phi^T||_inf = "
-            << MatrixInfNorm(p_diff, 6) << "\n";
-  std::cout << "steps accepted/rejected: " << out.stats.accepted_steps << "/" << out.stats.rejected_steps << "\n";
+  ode::log::Info("Two-body uncertainty propagation complete");
+  ode::log::Info("status: ", ode::ToString(out.status));
+  ode::log::Info("t_final [s]: ", out.t, " (period ~ ", period_s, ")");
+  ode::log::Info("state_final [km, km/s]:");
+  ode::log::Info("  r = [", out.x[0], ", ", out.x[1], ", ", out.x[2], "]");
+  ode::log::Info("  v = [", out.x[3], ", ", out.x[4], ", ", out.x[5], "]");
+  ode::log::Info("STM first row: [", out.phi[idx(6, 0, 0)], ", ", out.phi[idx(6, 0, 1)], ", ", out.phi[idx(6, 0, 2)],
+                 ", ", out.phi[idx(6, 0, 3)], ", ", out.phi[idx(6, 0, 4)], ", ", out.phi[idx(6, 0, 5)], "]");
+  ode::log::Info("||Phi - I||_inf: ", MatrixInfNorm(i_minus_phi, 6));
+  ode::log::Info("continuous-vs-discrete covariance consistency (Q=0): ||P - Phi*P0*Phi^T||_inf = ",
+                 MatrixInfNorm(p_diff, 6));
+  ode::log::Info("steps accepted/rejected: ", out.stats.accepted_steps, "/", out.stats.rejected_steps);
   return 0;
 }
-
