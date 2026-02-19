@@ -10,6 +10,7 @@
 #include "ode/tableaus/rkf45.hpp"
 #include "ode/tableaus/rkf78.hpp"
 #include "ode/types.hpp"
+#include "ode/uncertainty.hpp"
 
 namespace ode {
 
