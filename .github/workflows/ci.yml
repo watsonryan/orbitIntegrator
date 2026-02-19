@@ -1,0 +1,39 @@
+name: ci
+
+on:
+  push:
+  pull_request:
+
+jobs:
+  debug:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Configure
+        run: cmake -S . -B build -G Ninja -DCMAKE_BUILD_TYPE=Debug
+      - name: Build
+        run: cmake --build build -j
+      - name: Test
+        run: ctest --test-dir build --output-on-failure
+
+  asan:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Configure
+        run: cmake -S . -B build-asan -G Ninja -DCMAKE_BUILD_TYPE=Debug -DODE_ENABLE_ASAN=ON
+      - name: Build
+        run: cmake --build build-asan -j
+      - name: Test
+        run: ctest --test-dir build-asan --output-on-failure
+
+  ubsan:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Configure
+        run: cmake -S . -B build-ubsan -G Ninja -DCMAKE_BUILD_TYPE=Debug -DODE_ENABLE_UBSAN=ON
+      - name: Build
+        run: cmake --build build-ubsan -j
+      - name: Test
+        run: ctest --test-dir build-ubsan --output-on-failure
