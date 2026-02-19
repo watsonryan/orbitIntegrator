@@ -200,6 +200,10 @@ if(ODE_BUILD_TESTS)
   target_link_libraries(ode_test_regularization PRIVATE ode)
   add_test(NAME ode_test_regularization COMMAND ode_test_regularization)
 
+  add_executable(ode_test_reference_benchmark_corpus tests/test_reference_benchmark_corpus.cpp)
+  target_link_libraries(ode_test_reference_benchmark_corpus PRIVATE ode)
+  add_test(NAME ode_test_reference_benchmark_corpus COMMAND ode_test_reference_benchmark_corpus)
+
 
   add_executable(ode_perf_benchmark tests/ode_perf_benchmark.cpp)
   target_link_libraries(ode_perf_benchmark PRIVATE ode $<$<TARGET_EXISTS:fmt::fmt>:fmt::fmt>)

@@ -11,6 +11,8 @@ C++20 ODE integration toolkit with explicit RK, multistep, stiffness helpers, an
 - Dense output recording and event detection wrapper
 - Separate stiff module (`ode::stiff::integrate_implicit_euler`)
 - Uncertainty/variational propagation (`ode::uncertainty`) for STM and covariance
+- Regularized variational propagation for Cowell+Sundman (2D/3D)
+- Robust covariance numerics: Joseph-form update and square-root propagation
 - Forward-mode AD Jacobian helpers
 - Batch propagation helpers with reusable workspace (`ode::integrate_batch`)
 - Stiffness diagnostics helper (`ode::stiff::assess_stiffness`)
@@ -80,6 +82,7 @@ flowchart LR
 - `docs/math_variational_covariance.md`
 - `docs/math_stiffness.md`
 - `docs/math_regularization.md`
+- `docs/math_benchmark_corpus.md`
 - `docs/math_verification.md`
 
 ## Build and test
@@ -459,8 +462,11 @@ Comparison example:
 - RK stability-region characterization checks
 - stiffness diagnostics checks
 - covariance symmetry/PSD and continuous-vs-discrete consistency checks
+- Joseph-form and square-root covariance consistency checks
 - long-horizon orbital invariant checks (energy/angular momentum)
 - variational FD-vs-STM trajectory checks
+- regularized variational (Cowell+Sundman) parity checks
+- reference benchmark corpus regression across HighEcc/LEO-drag/GEO-J2-like regimes
 - dense-output accuracy regression checks
 - batch API regression checks
 - uncertainty STM/covariance + AD Jacobian regression checks

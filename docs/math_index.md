@@ -22,6 +22,7 @@ These docs describe numerical methods and analysis implemented in `orbitIntegrat
 - `docs/math_variational_covariance.md`
 - `docs/math_stiffness.md`
 - `docs/math_regularization.md`
+- `docs/math_benchmark_corpus.md`
 - `docs/math_verification.md`
 
 ## Notation
