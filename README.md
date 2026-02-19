@@ -10,6 +10,7 @@ C++20 explicit Runge-Kutta integrator for non-stiff ODEs:
 - Optional Sundman-transformed stepping mode (`integrate_sundman`)
 - Dense output recording and simple event detection wrapper
 - Separate stiff module (`ode::stiff::integrate_implicit_euler`)
+- Separate multistep module (`ode::multistep::integrate_abm4`)
 
 ## Architecture
 
@@ -29,6 +30,7 @@ flowchart TD
   B --> L[Dense and event wrapper]
   B --> M[Sundman wrapper]
   B --> N[Stiff module]
+  B --> O[Multistep ABM4 module]
 ```
 
 ## Build and test
@@ -135,6 +137,16 @@ std::vector<double> y0{1.0};
 auto stiff_res = ode::stiff::integrate_implicit_euler(rhs_stiff, 0.0, y0, 1.0);
 ```
 
+Multistep Adams-Bashforth-Moulton example:
+
+```cpp
+#include <ode/multistep/adams_bashforth_moulton.hpp>
+ode::multistep::AdamsBashforthMoultonOptions ms_opt;
+ms_opt.h = 0.01;
+ms_opt.corrector_iterations = 2;
+auto ms_res = ode::multistep::integrate_abm4(rhs, t0, y0, t1, ms_opt);
+```
+
 ## Simple 2-body orbital example
 
 Build and run:
@@ -165,6 +177,7 @@ Optional overrides:
 - algebra adapters (`std::array`, custom accessor algebra)
 - dense output + event handling
 - stiff module smoke/regression
+- multistep ABM4 regression/consistency checks
 - install/package-consumer smoke
 
 ## API docs (Doxygen)
