@@ -81,6 +81,10 @@ if(ODE_BUILD_TESTS)
   target_link_libraries(ode_test_sundman PRIVATE ode)
   add_test(NAME ode_test_sundman COMMAND ode_test_sundman)
 
+  add_executable(ode_test_multistep tests/test_multistep.cpp)
+  target_link_libraries(ode_test_multistep PRIVATE ode)
+  add_test(NAME ode_test_multistep COMMAND ode_test_multistep)
+
   add_executable(ode_perf_benchmark tests/ode_perf_benchmark.cpp)
   target_link_libraries(ode_perf_benchmark PRIVATE ode)
 
