@@ -1,3 +1,7 @@
+/**
+ * @file error_norm.hpp
+ * @brief Weighted RMS error norm used for adaptive RK acceptance tests.
+ */
 #pragma once
 
 #include <cmath>
@@ -9,6 +13,7 @@ namespace ode {
 
 template <class State, class Algebra = DefaultAlgebra<State>>
 requires AlgebraFor<Algebra, State>
+/** @brief Compute weighted RMS norm of embedded error estimate. */
 [[nodiscard]] double weighted_rms_error(const State& err,
                                         const State& y,
                                         const State& y_high,

@@ -1,3 +1,7 @@
+/**
+ * @file controller.hpp
+ * @brief Adaptive step-size controller for embedded RK methods.
+ */
 #pragma once
 
 #include <algorithm>
@@ -5,11 +9,13 @@
 
 namespace ode {
 
+/** @brief Safety-clamped power-law step-size update controller. */
 struct StepSizeController {
   double safety = 0.9;
   double fac_min = 0.2;
   double fac_max = 5.0;
 
+  /** @brief Propose next step size from current step and normalized error. */
   [[nodiscard]] double propose(double h, double err_norm, int order_high) const {
     if (err_norm <= 0.0) {
       return h * fac_max;

@@ -1,9 +1,14 @@
+/**
+ * @file rk4.hpp
+ * @brief Classic 4-stage 4th-order fixed-step Runge-Kutta tableau.
+ */
 #pragma once
 
 #include <array>
 
 namespace ode {
 
+/** @brief Classical RK4 tableau. */
 struct TableauRK4 {
   static constexpr int stages = 4;
   static constexpr bool has_embedded = false;

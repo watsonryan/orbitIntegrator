@@ -1,3 +1,7 @@
+/**
+ * @file algebra.hpp
+ * @brief State algebra adapter and concept for generic container support.
+ */
 #pragma once
 
 #include <cmath>
@@ -6,6 +10,7 @@
 
 namespace ode {
 
+/** @brief Default algebra implementation for indexable containers of doubles. */
 template <class State>
 struct DefaultAlgebra {
   static std::size_t size(const State& x) { return x.size(); }
@@ -41,6 +46,7 @@ struct DefaultAlgebra {
   }
 };
 
+/** @brief Concept describing the algebra operations required by the RK engine. */
 template <class Algebra, class State>
 concept AlgebraFor = requires(State a, const State b, double s) {
   { Algebra::size(a) } -> std::convertible_to<std::size_t>;

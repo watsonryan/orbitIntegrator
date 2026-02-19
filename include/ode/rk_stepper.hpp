@@ -1,3 +1,7 @@
+/**
+ * @file rk_stepper.hpp
+ * @brief Generic explicit Runge-Kutta single-step engine driven by a tableau.
+ */
 #pragma once
 
 #include <array>
@@ -10,6 +14,7 @@ template <class Tableau, class State, class Algebra = DefaultAlgebra<State>>
 requires AlgebraFor<Algebra, State>
 class ExplicitRKStepper {
  public:
+  /** @brief Construct a stepper and pre-size all stage buffers from a template state. */
   explicit ExplicitRKStepper(const State& y_template) {
     for (auto& stage : k_) {
       Algebra::resize_like(stage, y_template);
@@ -22,6 +27,10 @@ class ExplicitRKStepper {
   }
 
   template <class RHS>
+  /**
+   * @brief Execute one RK trial step and optionally compute embedded error estimate.
+   * @return true on success; false on RHS/state-size/finite-value failures.
+   */
   [[nodiscard]] bool step(RHS&& rhs,
                           double t,
                           const State& y,

@@ -1,3 +1,7 @@
+/**
+ * @file drivers.hpp
+ * @brief Fixed-step and adaptive integration drivers built on the generic stepper.
+ */
 #pragma once
 
 #include <cmath>
@@ -22,6 +26,54 @@ namespace detail {
   return static_cast<double>(dir) * bounded;
 }
 
+template <class State, class RHS, class Algebra>
+requires AlgebraFor<Algebra, State>
+[[nodiscard]] inline double estimate_initial_step(RHS&& rhs,
+                                                  double t0,
+                                                  const State& y0,
+                                                  double t1,
+                                                  double atol,
+                                                  double rtol,
+                                                  double h_min,
+                                                  double h_max,
+                                                  int dir) {
+  State dydt0{};
+  Algebra::resize_like(dydt0, y0);
+  rhs(t0, y0, dydt0);
+  if (!Algebra::finite(dydt0)) {
+    return static_cast<double>(dir) * h_min;
+  }
+
+  const std::size_t n = Algebra::size(y0);
+  if (n == 0) {
+    return static_cast<double>(dir) * h_min;
+  }
+
+  double y_norm2 = 0.0;
+  double f_norm2 = 0.0;
+  for (std::size_t i = 0; i < n; ++i) {
+    const double scale = atol + rtol * std::abs(y0[i]);
+    const double yi = y0[i] / scale;
+    const double fi = dydt0[i] / scale;
+    y_norm2 += yi * yi;
+    f_norm2 += fi * fi;
+  }
+  const double y_norm = std::sqrt(y_norm2 / static_cast<double>(n));
+  const double f_norm = std::sqrt(f_norm2 / static_cast<double>(n));
+
+  double h0 = 0.01;
+  if (f_norm > 1e-16) {
+    h0 = 0.01 * (y_norm / f_norm);
+  }
+  if (!std::isfinite(h0) || h0 <= 0.0) {
+    h0 = std::abs(t1 - t0) / 100.0;
+  }
+  if (!std::isfinite(h0) || h0 <= 0.0) {
+    h0 = h_min;
+  }
+  return clamp_abs_signed(static_cast<double>(dir) * h0, h_min, h_max, dir);
+}
+
 template <class State>
 [[nodiscard]] inline bool call_observer(const Observer<State>& obs, double t, const State& y) {
   if (!obs) {
@@ -34,6 +86,7 @@ template <class State>
 
 template <class Tableau, class State, class RHS, class Algebra = DefaultAlgebra<State>>
 requires AlgebraFor<Algebra, State>
+/** @brief Integrate with fixed step size until endpoint, stop, or error condition. */
 [[nodiscard]] IntegratorResult<State> integrate_fixed(RHS&& rhs,
                                                       double t0,
                                                       const State& y0,
@@ -104,6 +157,7 @@ requires AlgebraFor<Algebra, State>
 
 template <class Tableau, class State, class RHS, class Algebra = DefaultAlgebra<State>>
 requires AlgebraFor<Algebra, State>
+/** @brief Integrate with adaptive embedded error control until endpoint or failure. */
 [[nodiscard]] IntegratorResult<State> integrate_adaptive(RHS&& rhs,
                                                          double t0,
                                                          const State& y0,
@@ -138,11 +192,17 @@ requires AlgebraFor<Algebra, State>
   }
 
   const double span = std::abs(t1 - t0);
-  double h = (opt.h_init > 0.0) ? opt.h_init : span / 100.0;
-  if (!(h > 0.0) || !std::isfinite(h)) {
-    h = opt.h_min;
+  double h = 0.0;
+  if (opt.h_init > 0.0 && std::isfinite(opt.h_init)) {
+    h = detail::clamp_abs_signed(static_cast<double>(dir) * opt.h_init, opt.h_min, opt.h_max, dir);
+  } else {
+    h = detail::estimate_initial_step<State, RHS, Algebra>(std::forward<RHS>(rhs),
+                                                           t0, y0, t1, opt.atol, opt.rtol,
+                                                           opt.h_min, opt.h_max, dir);
   }
-  h = detail::clamp_abs_signed(static_cast<double>(dir) * h, opt.h_min, opt.h_max, dir);
+  if (!(std::abs(h) > 0.0) || !std::isfinite(h) || span == 0.0) {
+    h = static_cast<double>(dir) * opt.h_min;
+  }
 
   StepSizeController controller{opt.safety, opt.fac_min, opt.fac_max};
   ExplicitRKStepper<Tableau, State, Algebra> stepper(y0);
@@ -200,10 +260,16 @@ requires AlgebraFor<Algebra, State>
       }
     }
 
-    const double h_new = controller.propose(h, (err_norm > 0.0 ? err_norm : std::numeric_limits<double>::min()),
-                                            Tableau::order_high);
+    const double h_new = controller.propose(
+        h,
+        (err_norm > 0.0 ? err_norm : std::numeric_limits<double>::min()),
+        Tableau::order_high);
 
     if (!std::isfinite(h_new)) {
+      out.status = IntegratorStatus::StepSizeUnderflow;
+      return out;
+    }
+    if (std::abs(h_new) < opt.h_min) {
       out.status = IntegratorStatus::StepSizeUnderflow;
       return out;
     }

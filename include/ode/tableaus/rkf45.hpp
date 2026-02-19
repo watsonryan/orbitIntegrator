@@ -1,9 +1,14 @@
+/**
+ * @file rkf45.hpp
+ * @brief Fehlberg 4(5) embedded explicit Runge-Kutta tableau.
+ */
 #pragma once
 
 #include <array>
 
 namespace ode {
 
+/** @brief Standard RKF45 tableau with 5th-order accepted solution and 4th-order embedded estimate. */
 struct TableauRKF45 {
   static constexpr int stages = 6;
   static constexpr bool has_embedded = true;

@@ -1,6 +1,10 @@
+/**
+ * @file ode.hpp
+ * @brief Primary runtime API for selecting and running RK integration methods.
+ */
 #pragma once
 
-#include "ode/drivers.hpp"
+#include "ode/integrate_method.hpp"
 #include "ode/tableaus/rk4.hpp"
 #include "ode/tableaus/rkf45.hpp"
 #include "ode/tableaus/rkf78.hpp"
@@ -10,6 +14,7 @@ namespace ode {
 
 template <class State, class RHS, class Algebra = DefaultAlgebra<State>>
 requires AlgebraFor<Algebra, State>
+/** @brief Integrate using runtime method selection and shared options/observer API. */
 [[nodiscard]] IntegratorResult<State> integrate(RKMethod method,
                                                  RHS&& rhs,
                                                  double t0,
@@ -20,20 +25,14 @@ requires AlgebraFor<Algebra, State>
   switch (method) {
     case RKMethod::RK4:
       opt.adaptive = false;
-      return integrate_fixed<TableauRK4, State, RHS, Algebra>(std::forward<RHS>(rhs), t0, y0, t1, opt, obs);
+      return integrate_with_tableau<TableauRK4, State, RHS, Algebra>(std::forward<RHS>(rhs), t0, y0, t1, opt, obs);
     case RKMethod::RKF45:
-      if (opt.adaptive) {
-        return integrate_adaptive<TableauRKF45, State, RHS, Algebra>(std::forward<RHS>(rhs), t0, y0, t1, opt, obs);
-      }
-      return integrate_fixed<TableauRKF45, State, RHS, Algebra>(std::forward<RHS>(rhs), t0, y0, t1, opt, obs);
+      return integrate_with_tableau<TableauRKF45, State, RHS, Algebra>(std::forward<RHS>(rhs), t0, y0, t1, opt, obs);
     case RKMethod::RK8:
       opt.adaptive = false;
-      return integrate_fixed<TableauRKF78, State, RHS, Algebra>(std::forward<RHS>(rhs), t0, y0, t1, opt, obs);
+      return integrate_with_tableau<TableauRKF78, State, RHS, Algebra>(std::forward<RHS>(rhs), t0, y0, t1, opt, obs);
     case RKMethod::RKF78:
-      if (opt.adaptive) {
-        return integrate_adaptive<TableauRKF78, State, RHS, Algebra>(std::forward<RHS>(rhs), t0, y0, t1, opt, obs);
-      }
-      return integrate_fixed<TableauRKF78, State, RHS, Algebra>(std::forward<RHS>(rhs), t0, y0, t1, opt, obs);
+      return integrate_with_tableau<TableauRKF78, State, RHS, Algebra>(std::forward<RHS>(rhs), t0, y0, t1, opt, obs);
   }
 
   IntegratorResult<State> fallback{};

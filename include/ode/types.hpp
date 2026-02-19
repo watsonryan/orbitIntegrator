@@ -1,9 +1,14 @@
+/**
+ * @file types.hpp
+ * @brief Public API enums, options, status, stats, and result containers.
+ */
 #pragma once
 
 #include <functional>
 
 namespace ode {
 
+/** @brief Supported explicit Runge-Kutta methods. */
 enum class RKMethod {
   RK4,
   RKF45,
@@ -11,6 +16,7 @@ enum class RKMethod {
   RKF78
 };
 
+/** @brief Integration configuration options. */
 struct IntegratorOptions {
   double rtol = 1e-8;
   double atol = 1e-12;
@@ -31,6 +37,7 @@ struct IntegratorOptions {
   bool allow_step_reject = true;
 };
 
+/** @brief Terminal status returned by an integration run. */
 enum class IntegratorStatus {
   Success,
   MaxStepsExceeded,
@@ -41,6 +48,7 @@ enum class IntegratorStatus {
   UserStopped
 };
 
+/** @brief Runtime counters and last-step telemetry. */
 struct IntegratorStats {
   int attempted_steps = 0;
   int accepted_steps = 0;
@@ -50,6 +58,7 @@ struct IntegratorStats {
   double last_error_norm = 0.0;
 };
 
+/** @brief Generic integration result payload. */
 template <class State>
 struct IntegratorResult {
   IntegratorStatus status = IntegratorStatus::Success;
@@ -58,6 +67,7 @@ struct IntegratorResult {
   IntegratorStats stats{};
 };
 
+/** @brief Optional callback invoked after each accepted step; return false to stop. */
 template <class State>
 using Observer = std::function<bool(double, const State&)>;
 

@@ -1,9 +1,14 @@
+/**
+ * @file rkf78.hpp
+ * @brief Fehlberg 7(8) embedded explicit Runge-Kutta tableau (13 stages).
+ */
 #pragma once
 
 #include <array>
 
 namespace ode {
 
+/** @brief RKF78 tableau with 8th-order accepted solution and 7th-order embedded estimate. */
 struct TableauRKF78 {
   static constexpr int stages = 13;
   static constexpr bool has_embedded = true;
