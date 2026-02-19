@@ -164,6 +164,10 @@ if(ODE_BUILD_TESTS)
   target_link_libraries(ode_test_nordsieck PRIVATE ode)
   add_test(NAME ode_test_nordsieck COMMAND ode_test_nordsieck)
 
+  add_executable(ode_test_nordsieck_covariance tests/test_nordsieck_covariance.cpp)
+  target_link_libraries(ode_test_nordsieck_covariance PRIVATE ode)
+  add_test(NAME ode_test_nordsieck_covariance COMMAND ode_test_nordsieck_covariance)
+
   add_executable(ode_test_uncertainty tests/test_uncertainty.cpp)
   target_link_libraries(ode_test_uncertainty PRIVATE ode)
   add_test(NAME ode_test_uncertainty COMMAND ode_test_uncertainty)

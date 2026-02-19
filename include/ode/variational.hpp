@@ -11,6 +11,7 @@
 #include "ode/multistep/adams_bashforth_moulton.hpp"
 #include "ode/multistep/adams_high_order.hpp"
 #include "ode/multistep/gauss_jackson8.hpp"
+#include "ode/multistep/nordsieck_abm4.hpp"
 #include "ode/uncertainty.hpp"
 
 namespace ode::variational {
@@ -228,6 +229,226 @@ template <class RHS, class JacobianFn>
   }
   out.x.assign(res.y.begin(), res.y.begin() + static_cast<std::ptrdiff_t>(n));
   out.phi.assign(res.y.begin() + static_cast<std::ptrdiff_t>(n), res.y.end());
+  return out;
+}
+
+template <class RHS, class JacobianFn, class ProcessNoiseFn>
+[[nodiscard]] inline StateStmCovResult integrate_state_stm_cov_nordsieck_abm4(
+    RHS&& rhs,
+    JacobianFn&& jacobian_fn,
+    ProcessNoiseFn&& q_fn,
+    double t0,
+    const State& x0,
+    const Matrix& p0,
+    double t1,
+    ode::multistep::NordsieckAbmOptions opt,
+    Observer<State> obs = {}) {
+  StateStmCovResult out{};
+  out.t = t0;
+  out.x = x0;
+
+  const std::size_t n = x0.size();
+  if (n == 0 || p0.size() != n * n) {
+    out.status = IntegratorStatus::InvalidStepSize;
+    return out;
+  }
+
+  out.phi.assign(n * n, 0.0);
+  for (std::size_t i = 0; i < n; ++i) {
+    out.phi[i * n + i] = 1.0;
+  }
+  out.p = p0;
+
+  State y0_aug(n + n * n + n * n, 0.0);
+  for (std::size_t i = 0; i < n; ++i) {
+    y0_aug[i] = x0[i];
+    y0_aug[n + i * n + i] = 1.0;
+  }
+  for (std::size_t i = 0; i < n * n; ++i) {
+    y0_aug[n + n * n + i] = p0[i];
+  }
+
+  auto rhs_aug = [&](double t, const State& y_aug, State& dydt_aug) {
+    dydt_aug.assign(n + n * n + n * n, 0.0);
+    State x(n, 0.0);
+    for (std::size_t i = 0; i < n; ++i) {
+      x[i] = y_aug[i];
+    }
+
+    State dxdt;
+    rhs(t, x, dxdt);
+    Matrix a;
+    Matrix q;
+    const bool jac_ok = jacobian_fn(t, x, a);
+    const bool q_ok = q_fn(t, x, q);
+    if (dxdt.size() != n || !jac_ok || !q_ok || a.size() != n * n || q.size() != n * n) {
+      std::fill(dydt_aug.begin(), dydt_aug.end(), std::numeric_limits<double>::quiet_NaN());
+      return;
+    }
+
+    for (std::size_t i = 0; i < n; ++i) {
+      dydt_aug[i] = dxdt[i];
+    }
+
+    const std::size_t phi_off = n;
+    const std::size_t p_off = n + n * n;
+
+    for (std::size_t i = 0; i < n; ++i) {
+      for (std::size_t j = 0; j < n; ++j) {
+        double phi_dot = 0.0;
+        for (std::size_t k = 0; k < n; ++k) {
+          phi_dot += a[i * n + k] * y_aug[phi_off + k * n + j];
+        }
+        dydt_aug[phi_off + i * n + j] = phi_dot;
+      }
+    }
+
+    for (std::size_t i = 0; i < n; ++i) {
+      for (std::size_t j = 0; j < n; ++j) {
+        double ap = 0.0;
+        double pat = 0.0;
+        for (std::size_t k = 0; k < n; ++k) {
+          ap += a[i * n + k] * y_aug[p_off + k * n + j];
+          pat += y_aug[p_off + i * n + k] * a[j * n + k];
+        }
+        dydt_aug[p_off + i * n + j] = ap + pat + q[i * n + j];
+      }
+    }
+  };
+
+  const Observer<State> obs_aug = [&](double t, const State& y_aug) {
+    if (!obs) {
+      return true;
+    }
+    State x(n, 0.0);
+    for (std::size_t i = 0; i < n; ++i) {
+      x[i] = y_aug[i];
+    }
+    return obs(t, x);
+  };
+
+  const auto res = ode::multistep::integrate_nordsieck_abm4(rhs_aug, t0, y0_aug, t1, opt, obs_aug);
+  out.status = res.status;
+  out.t = res.t;
+  out.stats = res.stats;
+  if (res.y.size() != y0_aug.size()) {
+    out.status = IntegratorStatus::NaNDetected;
+    return out;
+  }
+  out.x.assign(res.y.begin(), res.y.begin() + static_cast<std::ptrdiff_t>(n));
+  out.phi.assign(res.y.begin() + static_cast<std::ptrdiff_t>(n),
+                 res.y.begin() + static_cast<std::ptrdiff_t>(n + n * n));
+  out.p.assign(res.y.begin() + static_cast<std::ptrdiff_t>(n + n * n), res.y.end());
+  return out;
+}
+
+template <class RHS, class JacobianFn, class ProcessNoiseFn>
+[[nodiscard]] inline StateStmCovResult integrate_state_stm_cov_nordsieck_abm6(
+    RHS&& rhs,
+    JacobianFn&& jacobian_fn,
+    ProcessNoiseFn&& q_fn,
+    double t0,
+    const State& x0,
+    const Matrix& p0,
+    double t1,
+    ode::multistep::NordsieckAbmOptions opt,
+    Observer<State> obs = {}) {
+  StateStmCovResult out{};
+  out.t = t0;
+  out.x = x0;
+
+  const std::size_t n = x0.size();
+  if (n == 0 || p0.size() != n * n) {
+    out.status = IntegratorStatus::InvalidStepSize;
+    return out;
+  }
+
+  out.phi.assign(n * n, 0.0);
+  for (std::size_t i = 0; i < n; ++i) {
+    out.phi[i * n + i] = 1.0;
+  }
+  out.p = p0;
+
+  State y0_aug(n + n * n + n * n, 0.0);
+  for (std::size_t i = 0; i < n; ++i) {
+    y0_aug[i] = x0[i];
+    y0_aug[n + i * n + i] = 1.0;
+  }
+  for (std::size_t i = 0; i < n * n; ++i) {
+    y0_aug[n + n * n + i] = p0[i];
+  }
+
+  auto rhs_aug = [&](double t, const State& y_aug, State& dydt_aug) {
+    dydt_aug.assign(n + n * n + n * n, 0.0);
+    State x(n, 0.0);
+    for (std::size_t i = 0; i < n; ++i) {
+      x[i] = y_aug[i];
+    }
+
+    State dxdt;
+    rhs(t, x, dxdt);
+    Matrix a;
+    Matrix q;
+    const bool jac_ok = jacobian_fn(t, x, a);
+    const bool q_ok = q_fn(t, x, q);
+    if (dxdt.size() != n || !jac_ok || !q_ok || a.size() != n * n || q.size() != n * n) {
+      std::fill(dydt_aug.begin(), dydt_aug.end(), std::numeric_limits<double>::quiet_NaN());
+      return;
+    }
+
+    for (std::size_t i = 0; i < n; ++i) {
+      dydt_aug[i] = dxdt[i];
+    }
+
+    const std::size_t phi_off = n;
+    const std::size_t p_off = n + n * n;
+
+    for (std::size_t i = 0; i < n; ++i) {
+      for (std::size_t j = 0; j < n; ++j) {
+        double phi_dot = 0.0;
+        for (std::size_t k = 0; k < n; ++k) {
+          phi_dot += a[i * n + k] * y_aug[phi_off + k * n + j];
+        }
+        dydt_aug[phi_off + i * n + j] = phi_dot;
+      }
+    }
+
+    for (std::size_t i = 0; i < n; ++i) {
+      for (std::size_t j = 0; j < n; ++j) {
+        double ap = 0.0;
+        double pat = 0.0;
+        for (std::size_t k = 0; k < n; ++k) {
+          ap += a[i * n + k] * y_aug[p_off + k * n + j];
+          pat += y_aug[p_off + i * n + k] * a[j * n + k];
+        }
+        dydt_aug[p_off + i * n + j] = ap + pat + q[i * n + j];
+      }
+    }
+  };
+
+  const Observer<State> obs_aug = [&](double t, const State& y_aug) {
+    if (!obs) {
+      return true;
+    }
+    State x(n, 0.0);
+    for (std::size_t i = 0; i < n; ++i) {
+      x[i] = y_aug[i];
+    }
+    return obs(t, x);
+  };
+
+  const auto res = ode::multistep::integrate_nordsieck_abm6(rhs_aug, t0, y0_aug, t1, opt, obs_aug);
+  out.status = res.status;
+  out.t = res.t;
+  out.stats = res.stats;
+  if (res.y.size() != y0_aug.size()) {
+    out.status = IntegratorStatus::NaNDetected;
+    return out;
+  }
+  out.x.assign(res.y.begin(), res.y.begin() + static_cast<std::ptrdiff_t>(n));
+  out.phi.assign(res.y.begin() + static_cast<std::ptrdiff_t>(n),
+                 res.y.begin() + static_cast<std::ptrdiff_t>(n + n * n));
+  out.p.assign(res.y.begin() + static_cast<std::ptrdiff_t>(n + n * n), res.y.end());
   return out;
 }
 
