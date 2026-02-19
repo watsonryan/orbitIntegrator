@@ -1,13 +1,23 @@
 #include <cmath>
-#include <iostream>
 
 #include <Eigen/Core>
 
 #include "ode/eigen_api.hpp"
+#include "ode/logging.hpp"
 
 namespace {
 
 constexpr double kPi = 3.14159265358979323846;
+
+struct GenericDynamics {
+  template <class Scalar>
+  void operator()(double, const Eigen::Matrix<Scalar, Eigen::Dynamic, 1>& x,
+                  Eigen::Matrix<Scalar, Eigen::Dynamic, 1>& dxdt) const {
+    dxdt.resize(2);
+    dxdt(0) = x(1);
+    dxdt(1) = -2.0 * x(0) - 3.0 * x(1);
+  }
+};
 
 int TestEigenIntegrateHarmonic() {
   using Vec = ode::eigen::Vector;
@@ -29,11 +39,11 @@ int TestEigenIntegrateHarmonic() {
 
   const auto res = ode::eigen::integrate(ode::RKMethod::RKF78, rhs, 0.0, y0, 2.0 * kPi, opt);
   if (res.status != ode::IntegratorStatus::Success) {
-    std::cerr << "eigen integrate failed\n";
+    ode::log::Error("eigen integrate failed");
     return 1;
   }
   if (std::abs(res.y(0) - 1.0) > 1e-9 || std::abs(res.y(1)) > 1e-9) {
-    std::cerr << "eigen integrate mismatch\n";
+    ode::log::Error("eigen integrate mismatch");
     return 1;
   }
   return 0;
@@ -78,19 +88,43 @@ int TestEigenStateStmCov() {
   const auto out_zero_q = ode::eigen::uncertainty::integrate_state_stm_cov(
       ode::RKMethod::RKF78, dynamics, jac, q_zero, 0.0, x0, p0, 1.0, opt);
   if (out.status != ode::IntegratorStatus::Success) {
-    std::cerr << "eigen uncertainty integration failed\n";
+    ode::log::Error("eigen uncertainty integration failed");
     return 1;
   }
   if (out_zero_q.status != ode::IntegratorStatus::Success) {
-    std::cerr << "eigen uncertainty integration failed for zero-Q reference\n";
+    ode::log::Error("eigen uncertainty integration failed for zero-Q reference");
     return 1;
   }
   if (out.x.size() != 2 || out.phi.rows() != 2 || out.phi.cols() != 2 || out.p.rows() != 2 || out.p.cols() != 2) {
-    std::cerr << "eigen uncertainty shape mismatch\n";
+    ode::log::Error("eigen uncertainty shape mismatch");
     return 1;
   }
   if (!(out.p(0, 0) > out_zero_q.p(0, 0)) || !(out.p(1, 1) > out_zero_q.p(1, 1))) {
-    std::cerr << "expected larger covariance than zero-Q case\n";
+    ode::log::Error("expected larger covariance than zero-Q case");
+    return 1;
+  }
+  return 0;
+}
+
+int TestEigenForwardAdJacobian() {
+  using Vec = ode::eigen::Vector;
+  using Mat = ode::eigen::Matrix;
+
+  Vec x(2);
+  x << 0.2, -0.4;
+  Mat a;
+  const bool ok = ode::eigen::uncertainty::jacobian_forward_ad(GenericDynamics{}, 0.0, x, a);
+  if (!ok) {
+    ode::log::Error("eigen jacobian_forward_ad failed");
+    return 1;
+  }
+  if (a.rows() != 2 || a.cols() != 2) {
+    ode::log::Error("eigen jacobian shape mismatch");
+    return 1;
+  }
+  if (std::abs(a(0, 0) - 0.0) > 1e-12 || std::abs(a(0, 1) - 1.0) > 1e-12 ||
+      std::abs(a(1, 0) + 2.0) > 1e-12 || std::abs(a(1, 1) + 3.0) > 1e-12) {
+    ode::log::Error("eigen jacobian values mismatch");
     return 1;
   }
   return 0;
@@ -103,6 +137,9 @@ int main() {
     return 1;
   }
   if (TestEigenStateStmCov() != 0) {
+    return 1;
+  }
+  if (TestEigenForwardAdJacobian() != 0) {
     return 1;
   }
   return 0;

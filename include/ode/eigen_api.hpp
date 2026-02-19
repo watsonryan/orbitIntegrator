@@ -4,24 +4,26 @@
  */
 #pragma once
 
+#include <cmath>
 #include <cstddef>
+#include <limits>
 #include <utility>
-#include <vector>
 
 #if __has_include(<Eigen/Core>)
 #include <Eigen/Core>
+#include <unsupported/Eigen/AutoDiff>
 #else
 #error "Eigen headers not found. Install Eigen >= 5 and/or enable ODE_FETCH_DEPS."
 #endif
 
 #include "ode/algebra_adapters.hpp"
 #include "ode/ode.hpp"
-#include "ode/uncertainty.hpp"
 
 namespace ode::eigen {
 
 using Vector = Eigen::VectorXd;
 using Matrix = Eigen::MatrixXd;
+using MatrixRM = Eigen::Matrix<double, Eigen::Dynamic, Eigen::Dynamic, Eigen::RowMajor>;
 
 template <class RHS>
 [[nodiscard]] inline IntegratorResult<Vector> integrate(RKMethod method,
@@ -50,38 +52,31 @@ template <class RHS, class DtDs>
 
 namespace detail {
 
-[[nodiscard]] inline ode::DynamicState ToStd(const Vector& x) {
-  return ode::DynamicState(x.data(), x.data() + x.size());
+[[nodiscard]] inline bool finite(const Vector& x) {
+  return x.allFinite();
 }
 
-[[nodiscard]] inline Vector ToEigen(const ode::DynamicState& x) {
-  Vector out(static_cast<Eigen::Index>(x.size()));
-  for (std::size_t i = 0; i < x.size(); ++i) {
-    out(static_cast<Eigen::Index>(i)) = x[i];
-  }
-  return out;
+[[nodiscard]] inline bool finite(const Matrix& x) {
+  return x.allFinite();
 }
 
-[[nodiscard]] inline ode::DynamicMatrix ToStd(const Matrix& m) {
-  const std::size_t r = static_cast<std::size_t>(m.rows());
-  const std::size_t c = static_cast<std::size_t>(m.cols());
-  ode::DynamicMatrix out(r * c, 0.0);
-  for (std::size_t i = 0; i < r; ++i) {
-    for (std::size_t j = 0; j < c; ++j) {
-      out[i * c + j] = m(static_cast<Eigen::Index>(i), static_cast<Eigen::Index>(j));
+[[nodiscard]] inline MatrixRM map_row_major(const Vector& z, Eigen::Index offset, Eigen::Index n) {
+  MatrixRM out(n, n);
+  for (Eigen::Index i = 0; i < n; ++i) {
+    for (Eigen::Index j = 0; j < n; ++j) {
+      out(i, j) = z(offset + i * n + j);
     }
   }
   return out;
 }
 
-[[nodiscard]] inline Matrix ToEigen(const ode::DynamicMatrix& m, std::size_t n) {
-  Matrix out(static_cast<Eigen::Index>(n), static_cast<Eigen::Index>(n));
-  for (std::size_t i = 0; i < n; ++i) {
-    for (std::size_t j = 0; j < n; ++j) {
-      out(static_cast<Eigen::Index>(i), static_cast<Eigen::Index>(j)) = m[i * n + j];
+inline void write_row_major(const MatrixRM& m, Vector& z, Eigen::Index offset) {
+  const Eigen::Index n = m.rows();
+  for (Eigen::Index i = 0; i < n; ++i) {
+    for (Eigen::Index j = 0; j < n; ++j) {
+      z(offset + i * n + j) = m(i, j);
     }
   }
-  return out;
 }
 
 }  // namespace detail
@@ -107,25 +102,35 @@ struct StateStmCovResult {
 
 template <class Dynamics>
 [[nodiscard]] inline bool jacobian_forward_ad(Dynamics&& dynamics, double t, const Vector& x, Matrix& a_out) {
-  const std::size_t n = static_cast<std::size_t>(x.size());
-  auto dyn_std = [&dynamics, n](double ti, const ode::DynamicState& xs, ode::DynamicState& dxs) {
-    Vector xe(static_cast<Eigen::Index>(n));
-    for (std::size_t i = 0; i < n; ++i) {
-      xe(static_cast<Eigen::Index>(i)) = xs[i];
-    }
-    Vector dxe;
-    dynamics(ti, xe, dxe);
-    dxs.resize(n);
-    for (std::size_t i = 0; i < n; ++i) {
-      dxs[i] = dxe(static_cast<Eigen::Index>(i));
-    }
-  };
+  using AD = Eigen::AutoDiffScalar<Eigen::VectorXd>;
+  const Eigen::Index n = x.size();
 
-  ode::DynamicMatrix a_std;
-  if (!ode::uncertainty::jacobian_forward_ad(dyn_std, t, detail::ToStd(x), a_std)) {
+  Eigen::Matrix<AD, Eigen::Dynamic, 1> x_ad(n);
+  for (Eigen::Index i = 0; i < n; ++i) {
+    x_ad(i).value() = x(i);
+    x_ad(i).derivatives() = Eigen::VectorXd::Zero(n);
+    x_ad(i).derivatives()(i) = 1.0;
+  }
+
+  Eigen::Matrix<AD, Eigen::Dynamic, 1> f_ad;
+  dynamics(t, x_ad, f_ad);
+  if (f_ad.size() != n) {
     return false;
   }
-  a_out = detail::ToEigen(a_std, n);
+
+  a_out.resize(n, n);
+  for (Eigen::Index i = 0; i < n; ++i) {
+    if (!std::isfinite(f_ad(i).value()) || f_ad(i).derivatives().size() != n) {
+      return false;
+    }
+    for (Eigen::Index j = 0; j < n; ++j) {
+      const double dij = f_ad(i).derivatives()(j);
+      if (!std::isfinite(dij)) {
+        return false;
+      }
+      a_out(i, j) = dij;
+    }
+  }
   return true;
 }
 
@@ -138,55 +143,56 @@ template <class RHS, class JacobianFn>
                                                         double t1,
                                                         IntegratorOptions opt,
                                                         Observer<Vector> obs = {}) {
-  const std::size_t n = static_cast<std::size_t>(x0.size());
+  const Eigen::Index n = x0.size();
+  StateStmResult out{};
+  out.t = t0;
+  out.x = x0;
+  out.phi = Matrix::Identity(n, n);
 
-  auto rhs_std = [&rhs, n](double t, const ode::DynamicState& xs, ode::DynamicState& dxs) {
-    Vector xe(static_cast<Eigen::Index>(n));
-    for (std::size_t i = 0; i < n; ++i) {
-      xe(static_cast<Eigen::Index>(i)) = xs[i];
+  Vector z0(n + n * n);
+  z0.head(n) = x0;
+  detail::write_row_major(MatrixRM::Identity(n, n), z0, n);
+
+  auto rhs_aug = [n, &rhs, &jacobian_fn](double t, const Vector& z, Vector& dzdt) {
+    const Vector x = z.head(n);
+
+    Vector xdot;
+    rhs(t, x, xdot);
+
+    dzdt.resize(n + n * n);
+    if (xdot.size() != n || !detail::finite(xdot)) {
+      dzdt.setConstant(std::numeric_limits<double>::quiet_NaN());
+      return;
     }
-    Vector dxe;
-    rhs(t, xe, dxe);
-    dxs.resize(n);
-    for (std::size_t i = 0; i < n; ++i) {
-      dxs[i] = dxe(static_cast<Eigen::Index>(i));
+    dzdt.head(n) = xdot;
+
+    Matrix a;
+    if (!jacobian_fn(t, x, a) || a.rows() != n || a.cols() != n || !detail::finite(a)) {
+      dzdt.setConstant(std::numeric_limits<double>::quiet_NaN());
+      return;
     }
+
+    const MatrixRM phi = detail::map_row_major(z, n, n);
+    const MatrixRM phi_dot = (a * phi).eval();
+    detail::write_row_major(phi_dot, dzdt, n);
   };
 
-  auto jac_std = [&jacobian_fn, n](double t, const ode::DynamicState& xs, ode::DynamicMatrix& a) {
-    Vector xe(static_cast<Eigen::Index>(n));
-    for (std::size_t i = 0; i < n; ++i) {
-      xe(static_cast<Eigen::Index>(i)) = xs[i];
-    }
-    Matrix ae;
-    if (!jacobian_fn(t, xe, ae) || ae.rows() != static_cast<Eigen::Index>(n) ||
-        ae.cols() != static_cast<Eigen::Index>(n)) {
-      return false;
-    }
-    a = detail::ToStd(ae);
-    return true;
-  };
-
-  Observer<ode::DynamicState> obs_std = {};
+  Observer<Vector> obs_aug = {};
   if (obs) {
-    obs_std = [obs = std::move(obs), n](double t, const ode::DynamicState& xs) {
-      Vector xe(static_cast<Eigen::Index>(n));
-      for (std::size_t i = 0; i < n; ++i) {
-        xe(static_cast<Eigen::Index>(i)) = xs[i];
-      }
-      return obs(t, xe);
+    obs_aug = [n, obs = std::move(obs)](double t, const Vector& z) {
+      return obs(t, z.head(n));
     };
   }
 
-  const auto out_std = ode::uncertainty::integrate_state_stm(
-      method, rhs_std, jac_std, t0, detail::ToStd(x0), t1, opt, obs_std);
+  const auto res = ode::eigen::integrate(method, rhs_aug, t0, z0, t1, opt, obs_aug);
 
-  StateStmResult out{};
-  out.status = out_std.status;
-  out.t = out_std.t;
-  out.stats = out_std.stats;
-  out.x = detail::ToEigen(out_std.x);
-  out.phi = detail::ToEigen(out_std.phi, n);
+  out.status = res.status;
+  out.t = res.t;
+  out.stats = res.stats;
+  if (res.y.size() == n + n * n) {
+    out.x = res.y.head(n);
+    out.phi = detail::map_row_major(res.y, n, n);
+  }
   return out;
 }
 
@@ -201,88 +207,86 @@ template <class RHS, class JacobianFn, class ProcessNoiseFn>
                                                                double t1,
                                                                IntegratorOptions opt,
                                                                Observer<Vector> obs = {}) {
-  const std::size_t n = static_cast<std::size_t>(x0.size());
+  const Eigen::Index n = x0.size();
+  StateStmCovResult out{};
+  out.t = t0;
+  out.x = x0;
+  out.phi = Matrix::Identity(n, n);
+  out.p = p0;
 
-  auto rhs_std = [&rhs, n](double t, const ode::DynamicState& xs, ode::DynamicState& dxs) {
-    Vector xe(static_cast<Eigen::Index>(n));
-    for (std::size_t i = 0; i < n; ++i) {
-      xe(static_cast<Eigen::Index>(i)) = xs[i];
+  if (p0.rows() != n || p0.cols() != n) {
+    out.status = IntegratorStatus::InvalidStepSize;
+    return out;
+  }
+
+  Vector z0(n + 2 * n * n);
+  z0.head(n) = x0;
+  detail::write_row_major(MatrixRM::Identity(n, n), z0, n);
+  detail::write_row_major(p0, z0, n + n * n);
+
+  auto rhs_aug = [n, &rhs, &jacobian_fn, &q_fn](double t, const Vector& z, Vector& dzdt) {
+    const Vector x = z.head(n);
+
+    Vector xdot;
+    rhs(t, x, xdot);
+
+    dzdt.resize(n + 2 * n * n);
+    if (xdot.size() != n || !detail::finite(xdot)) {
+      dzdt.setConstant(std::numeric_limits<double>::quiet_NaN());
+      return;
     }
-    Vector dxe;
-    rhs(t, xe, dxe);
-    dxs.resize(n);
-    for (std::size_t i = 0; i < n; ++i) {
-      dxs[i] = dxe(static_cast<Eigen::Index>(i));
+    dzdt.head(n) = xdot;
+
+    Matrix a;
+    if (!jacobian_fn(t, x, a) || a.rows() != n || a.cols() != n || !detail::finite(a)) {
+      dzdt.setConstant(std::numeric_limits<double>::quiet_NaN());
+      return;
     }
+
+    Matrix q;
+    if (!q_fn(t, x, q) || q.rows() != n || q.cols() != n || !detail::finite(q)) {
+      dzdt.setConstant(std::numeric_limits<double>::quiet_NaN());
+      return;
+    }
+
+    const MatrixRM phi = detail::map_row_major(z, n, n);
+    const MatrixRM p = detail::map_row_major(z, n + n * n, n);
+
+    const MatrixRM phi_dot = (a * phi).eval();
+    const MatrixRM p_dot = (a * p + p * a.transpose() + q).eval();
+
+    detail::write_row_major(phi_dot, dzdt, n);
+    detail::write_row_major(p_dot, dzdt, n + n * n);
   };
 
-  auto jac_std = [&jacobian_fn, n](double t, const ode::DynamicState& xs, ode::DynamicMatrix& a) {
-    Vector xe(static_cast<Eigen::Index>(n));
-    for (std::size_t i = 0; i < n; ++i) {
-      xe(static_cast<Eigen::Index>(i)) = xs[i];
-    }
-    Matrix ae;
-    if (!jacobian_fn(t, xe, ae) || ae.rows() != static_cast<Eigen::Index>(n) ||
-        ae.cols() != static_cast<Eigen::Index>(n)) {
-      return false;
-    }
-    a = detail::ToStd(ae);
-    return true;
-  };
-
-  auto q_std = [&q_fn, n](double t, const ode::DynamicState& xs, ode::DynamicMatrix& q) {
-    Vector xe(static_cast<Eigen::Index>(n));
-    for (std::size_t i = 0; i < n; ++i) {
-      xe(static_cast<Eigen::Index>(i)) = xs[i];
-    }
-    Matrix qe;
-    if (!q_fn(t, xe, qe) || qe.rows() != static_cast<Eigen::Index>(n) ||
-        qe.cols() != static_cast<Eigen::Index>(n)) {
-      return false;
-    }
-    q = detail::ToStd(qe);
-    return true;
-  };
-
-  Observer<ode::DynamicState> obs_std = {};
+  Observer<Vector> obs_aug = {};
   if (obs) {
-    obs_std = [obs = std::move(obs), n](double t, const ode::DynamicState& xs) {
-      Vector xe(static_cast<Eigen::Index>(n));
-      for (std::size_t i = 0; i < n; ++i) {
-        xe(static_cast<Eigen::Index>(i)) = xs[i];
-      }
-      return obs(t, xe);
+    obs_aug = [n, obs = std::move(obs)](double t, const Vector& z) {
+      return obs(t, z.head(n));
     };
   }
 
-  const auto out_std = ode::uncertainty::integrate_state_stm_cov(method,
-                                                                  rhs_std,
-                                                                  jac_std,
-                                                                  q_std,
-                                                                  t0,
-                                                                  detail::ToStd(x0),
-                                                                  detail::ToStd(p0),
-                                                                  t1,
-                                                                  opt,
-                                                                  obs_std);
+  const auto res = ode::eigen::integrate(method, rhs_aug, t0, z0, t1, opt, obs_aug);
 
-  StateStmCovResult out{};
-  out.status = out_std.status;
-  out.t = out_std.t;
-  out.stats = out_std.stats;
-  out.x = detail::ToEigen(out_std.x);
-  out.phi = detail::ToEigen(out_std.phi, n);
-  out.p = detail::ToEigen(out_std.p, n);
+  out.status = res.status;
+  out.t = res.t;
+  out.stats = res.stats;
+  if (res.y.size() == n + 2 * n * n) {
+    out.x = res.y.head(n);
+    out.phi = detail::map_row_major(res.y, n, n);
+    out.p = detail::map_row_major(res.y, n + n * n, n);
+  }
   return out;
 }
 
 [[nodiscard]] inline Matrix propagate_covariance_discrete(const Matrix& phi,
                                                           const Matrix& p0,
                                                           const Matrix& qd) {
-  const auto n = static_cast<std::size_t>(phi.rows());
-  const auto p = ode::uncertainty::propagate_covariance_discrete(
-      detail::ToStd(phi), detail::ToStd(p0), detail::ToStd(qd), n);
-  return detail::ToEigen(p, n);
+  if (phi.rows() != phi.cols() || p0.rows() != phi.rows() || p0.cols() != phi.cols() ||
+      qd.rows() != phi.rows() || qd.cols() != phi.cols()) {
+    return Matrix{};
+  }
+  return (phi * p0 * phi.transpose() + qd).eval();
 }
 
 }  // namespace uncertainty
