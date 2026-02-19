@@ -150,6 +150,10 @@ if(ODE_BUILD_TESTS)
   target_link_libraries(ode_test_gauss_jackson PRIVATE ode)
   add_test(NAME ode_test_gauss_jackson COMMAND ode_test_gauss_jackson)
 
+  add_executable(ode_test_symplectic tests/test_symplectic.cpp)
+  target_link_libraries(ode_test_symplectic PRIVATE ode)
+  add_test(NAME ode_test_symplectic COMMAND ode_test_symplectic)
+
   add_executable(ode_test_nordsieck tests/test_nordsieck.cpp)
   target_link_libraries(ode_test_nordsieck PRIVATE ode)
   add_test(NAME ode_test_nordsieck COMMAND ode_test_nordsieck)

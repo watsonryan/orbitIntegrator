@@ -7,6 +7,7 @@
 #include "ode/batch.hpp"
 #include "ode/integrate_method.hpp"
 #include "ode/multistep/gauss_jackson8.hpp"
+#include "ode/symplectic.hpp"
 #include "ode/sundman.hpp"
 #include "ode/tableaus/rk4.hpp"
 #include "ode/tableaus/rkf45.hpp"
