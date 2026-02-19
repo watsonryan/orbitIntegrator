@@ -69,6 +69,10 @@ if(ODE_BUILD_TESTS)
   target_link_libraries(ode_test_robustness PRIVATE ode)
   add_test(NAME ode_test_robustness COMMAND ode_test_robustness)
 
+  add_executable(ode_test_canonical_systems tests/test_canonical_systems.cpp)
+  target_link_libraries(ode_test_canonical_systems PRIVATE ode)
+  add_test(NAME ode_test_canonical_systems COMMAND ode_test_canonical_systems)
+
   add_executable(ode_test_state_array tests/test_state_array.cpp)
   target_link_libraries(ode_test_state_array PRIVATE ode)
   add_test(NAME ode_test_state_array COMMAND ode_test_state_array)
@@ -76,6 +80,10 @@ if(ODE_BUILD_TESTS)
   add_executable(ode_test_algebra_adapters tests/test_algebra_adapters.cpp)
   target_link_libraries(ode_test_algebra_adapters PRIVATE ode)
   add_test(NAME ode_test_algebra_adapters COMMAND ode_test_algebra_adapters)
+
+  add_executable(ode_test_batch tests/test_batch.cpp)
+  target_link_libraries(ode_test_batch PRIVATE ode)
+  add_test(NAME ode_test_batch COMMAND ode_test_batch)
 
   if(TARGET Eigen3::Eigen)
     add_executable(ode_test_eigen_api tests/test_eigen_api.cpp)
@@ -99,6 +107,10 @@ if(ODE_BUILD_TESTS)
   target_link_libraries(ode_test_multistep PRIVATE ode)
   add_test(NAME ode_test_multistep COMMAND ode_test_multistep)
 
+  add_executable(ode_test_gauss_jackson tests/test_gauss_jackson.cpp)
+  target_link_libraries(ode_test_gauss_jackson PRIVATE ode)
+  add_test(NAME ode_test_gauss_jackson COMMAND ode_test_gauss_jackson)
+
   add_executable(ode_test_nordsieck tests/test_nordsieck.cpp)
   target_link_libraries(ode_test_nordsieck PRIVATE ode)
   add_test(NAME ode_test_nordsieck COMMAND ode_test_nordsieck)
@@ -106,6 +118,10 @@ if(ODE_BUILD_TESTS)
   add_executable(ode_test_uncertainty tests/test_uncertainty.cpp)
   target_link_libraries(ode_test_uncertainty PRIVATE ode)
   add_test(NAME ode_test_uncertainty COMMAND ode_test_uncertainty)
+
+  add_executable(ode_test_variational tests/test_variational.cpp)
+  target_link_libraries(ode_test_variational PRIVATE ode)
+  add_test(NAME ode_test_variational COMMAND ode_test_variational)
 
   add_executable(ode_perf_benchmark tests/ode_perf_benchmark.cpp)
   target_link_libraries(ode_perf_benchmark PRIVATE ode $<$<TARGET_EXISTS:fmt::fmt>:fmt::fmt>)
