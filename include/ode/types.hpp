@@ -48,6 +48,27 @@ enum class IntegratorStatus {
   UserStopped
 };
 
+/** @brief Convert IntegratorStatus to stable string token. */
+[[nodiscard]] inline const char* ToString(IntegratorStatus status) {
+  switch (status) {
+    case IntegratorStatus::Success:
+      return "success";
+    case IntegratorStatus::MaxStepsExceeded:
+      return "max_steps_exceeded";
+    case IntegratorStatus::StepSizeUnderflow:
+      return "step_size_underflow";
+    case IntegratorStatus::InvalidTolerance:
+      return "invalid_tolerance";
+    case IntegratorStatus::InvalidStepSize:
+      return "invalid_step_size";
+    case IntegratorStatus::NaNDetected:
+      return "nan_detected";
+    case IntegratorStatus::UserStopped:
+      return "user_stopped";
+  }
+  return "unknown";
+}
+
 /** @brief Runtime counters and last-step telemetry. */
 struct IntegratorStats {
   int attempted_steps = 0;
