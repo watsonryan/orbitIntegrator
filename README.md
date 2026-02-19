@@ -2,19 +2,16 @@
 
 Author: Watson
 
-C++20 explicit Runge-Kutta integrator for non-stiff ODEs:
-- RK4 (fixed-step)
-- RKF45 (embedded adaptive 4(5), fixed-step using high-order solution also supported)
-- RKF78 (embedded adaptive 7(8), fixed-step using high-order solution also supported)
-- RK8 alias (fixed-step using RKF78 high-order weights)
+C++20 ODE integration toolkit with explicit RK, multistep, stiffness helpers, and variational propagation:
+- Explicit RK methods: RK4, RKF45, RKF78, RK8 alias
+- Multistep methods: ABM4, ABM6, Nordsieck-style adaptive Adams
+- Gauss-Jackson-style second-order multistep integrator
 - Optional Sundman-transformed stepping mode (`integrate_sundman`)
-- Dense output recording and simple event detection wrapper
+- Dense output recording and event detection wrapper
 - Separate stiff module (`ode::stiff::integrate_implicit_euler`)
-- Separate multistep module (`ode::multistep::integrate_abm4`)
-- Higher-order Adams method (`ode::multistep::integrate_abm6`)
-- Nordsieck-style adaptive Adams (`ode::multistep::integrate_nordsieck_abm4`)
-- Uncertainty propagation module (`ode::uncertainty`) for STM and covariance
-- Forward-mode AD Jacobian helper (`ode::uncertainty::jacobian_forward_ad`)
+- Uncertainty/variational propagation (`ode::uncertainty`) for STM and covariance
+- Forward-mode AD Jacobian helpers
+- Batch propagation helpers with reusable workspace (`ode::integrate_batch`)
 - Eigen-first convenience API (`ode/eigen_api.hpp`, Eigen >= 5.0)
 
 ## Architecture
@@ -40,6 +37,8 @@ flowchart TD
   B --> Q[Nordsieck adaptive ABM module]
   B --> R[Uncertainty STM and covariance module]
   B --> S[Eigen API wrappers]
+  B --> T[Batch propagation helpers]
+  B --> U[Variational aliases]
 ```
 
 ## Build and test
@@ -181,6 +180,20 @@ nopt.atol = 1e-12;
 auto nres = ode::multistep::integrate_nordsieck_abm4(rhs, t0, y0, t1, nopt);
 ```
 
+Gauss-Jackson-style second-order integration:
+
+```cpp
+#include <ode/multistep/gauss_jackson8.hpp>
+std::vector<double> r0{1.0}, v0{0.0};
+auto accel = [](double, const std::vector<double>& r, const std::vector<double>&, std::vector<double>& a) {
+  a.resize(1);
+  a[0] = -r[0];
+};
+ode::multistep::GaussJackson8Options gj_opt;
+gj_opt.h = 0.01;
+auto gj = ode::multistep::integrate_gauss_jackson8(accel, 0.0, r0, v0, 6.283185307179586, gj_opt);
+```
+
 Uncertainty propagation (state + STM + covariance):
 
 ```cpp
@@ -212,6 +225,26 @@ ode::IntegratorOptions opt;
 
 auto out = ode::uncertainty::integrate_state_stm_cov(
     ode::RKMethod::RKF78, dynamics, jac_ad, q_const, 0.0, x0, p0, 10.0, opt);
+```
+
+Variational aliases (model-agnostic naming):
+
+```cpp
+#include <ode/variational.hpp>
+auto out = ode::variational::integrate_state_stm_cov(
+    ode::RKMethod::RKF78, rhs, jacobian, q_fn, t0, x0, p0, t1, opt);
+```
+
+Batch propagation:
+
+```cpp
+#include <ode/batch.hpp>
+std::vector<ode::BatchTask<std::vector<double>>> tasks{
+  {.t0 = 0.0, .t1 = 1.0, .y0 = {1.0}},
+  {.t0 = 0.0, .t1 = 2.0, .y0 = {2.0}},
+};
+ode::BatchWorkspace<std::vector<double>> ws;
+auto results = ode::integrate_batch(ode::RKMethod::RKF78, rhs, tasks, opt, &ws);
 ```
 
 Eigen-first API:
@@ -310,7 +343,11 @@ Optional overrides:
 - stiff module smoke/regression
 - multistep ABM4 regression/consistency checks
 - multistep ABM6 and Nordsieck regression checks
+- Gauss-Jackson second-order regression checks
+- canonical nonlinear ODE regression checks (Lorenz, Van der Pol, Kepler energy drift)
+- batch API regression checks
 - uncertainty STM/covariance + AD Jacobian regression checks
+- variational wrapper regression checks
 - install/package-consumer smoke
 
 ## API docs (Doxygen)
