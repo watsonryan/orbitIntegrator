@@ -73,6 +73,12 @@ if(ODE_BUILD_TESTS)
   target_link_libraries(ode_test_algebra_adapters PRIVATE ode)
   add_test(NAME ode_test_algebra_adapters COMMAND ode_test_algebra_adapters)
 
+  if(TARGET Eigen3::Eigen)
+    add_executable(ode_test_eigen_api tests/test_eigen_api.cpp)
+    target_link_libraries(ode_test_eigen_api PRIVATE ode Eigen3::Eigen)
+    add_test(NAME ode_test_eigen_api COMMAND ode_test_eigen_api)
+  endif()
+
   add_executable(ode_test_dense_events tests/test_dense_events.cpp)
   target_link_libraries(ode_test_dense_events PRIVATE ode)
   add_test(NAME ode_test_dense_events COMMAND ode_test_dense_events)
