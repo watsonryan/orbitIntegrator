@@ -38,13 +38,37 @@ class ExplicitRKStepper {
                           State& y_high,
                           State* err_out) {
     const auto n = Algebra::size(y);
+    constexpr bool kHasContiguous =
+        requires(const State& c, State& m) {
+          c.data();
+          m.data();
+        };
 
     for (int i = 0; i < Tableau::stages; ++i) {
-      Algebra::assign(y_tmp_, y);
-      for (int j = 0; j < i; ++j) {
-        const double aij = Tableau::a[static_cast<std::size_t>(i)][static_cast<std::size_t>(j)];
-        if (aij != 0.0) {
-          Algebra::axpy(h * aij, k_[static_cast<std::size_t>(j)], y_tmp_);
+      if constexpr (kHasContiguous) {
+        const auto* yp = y.data();
+        auto* ytmp = y_tmp_.data();
+        for (std::size_t q = 0; q < n; ++q) {
+          ytmp[q] = yp[q];
+        }
+        for (int j = 0; j < i; ++j) {
+          const double aij = Tableau::a[static_cast<std::size_t>(i)][static_cast<std::size_t>(j)];
+          if (aij == 0.0) {
+            continue;
+          }
+          const double s = h * aij;
+          const auto* kj = k_[static_cast<std::size_t>(j)].data();
+          for (std::size_t q = 0; q < n; ++q) {
+            ytmp[q] += s * kj[q];
+          }
+        }
+      } else {
+        Algebra::assign(y_tmp_, y);
+        for (int j = 0; j < i; ++j) {
+          const double aij = Tableau::a[static_cast<std::size_t>(i)][static_cast<std::size_t>(j)];
+          if (aij != 0.0) {
+            Algebra::axpy(h * aij, k_[static_cast<std::size_t>(j)], y_tmp_);
+          }
         }
       }
 
@@ -58,11 +82,30 @@ class ExplicitRKStepper {
       }
     }
 
-    Algebra::assign(y_high, y);
-    for (int i = 0; i < Tableau::stages; ++i) {
-      const double bi = Tableau::b_high[static_cast<std::size_t>(i)];
-      if (bi != 0.0) {
-        Algebra::axpy(h * bi, k_[static_cast<std::size_t>(i)], y_high);
+    if constexpr (kHasContiguous) {
+      const auto* yp = y.data();
+      auto* yhp = y_high.data();
+      for (std::size_t q = 0; q < n; ++q) {
+        yhp[q] = yp[q];
+      }
+      for (int i = 0; i < Tableau::stages; ++i) {
+        const double bi = Tableau::b_high[static_cast<std::size_t>(i)];
+        if (bi == 0.0) {
+          continue;
+        }
+        const double s = h * bi;
+        const auto* ki = k_[static_cast<std::size_t>(i)].data();
+        for (std::size_t q = 0; q < n; ++q) {
+          yhp[q] += s * ki[q];
+        }
+      }
+    } else {
+      Algebra::assign(y_high, y);
+      for (int i = 0; i < Tableau::stages; ++i) {
+        const double bi = Tableau::b_high[static_cast<std::size_t>(i)];
+        if (bi != 0.0) {
+          Algebra::axpy(h * bi, k_[static_cast<std::size_t>(i)], y_high);
+        }
       }
     }
 
@@ -72,16 +115,44 @@ class ExplicitRKStepper {
 
     if (err_out != nullptr) {
       if constexpr (Tableau::has_embedded) {
-        Algebra::assign(y_low_, y);
-        for (int i = 0; i < Tableau::stages; ++i) {
-          const double bi = Tableau::b_low[static_cast<std::size_t>(i)];
-          if (bi != 0.0) {
-            Algebra::axpy(h * bi, k_[static_cast<std::size_t>(i)], y_low_);
+        if constexpr (kHasContiguous) {
+          const auto* yp = y.data();
+          auto* ylp = y_low_.data();
+          for (std::size_t q = 0; q < n; ++q) {
+            ylp[q] = yp[q];
+          }
+          for (int i = 0; i < Tableau::stages; ++i) {
+            const double bi = Tableau::b_low[static_cast<std::size_t>(i)];
+            if (bi == 0.0) {
+              continue;
+            }
+            const double s = h * bi;
+            const auto* ki = k_[static_cast<std::size_t>(i)].data();
+            for (std::size_t q = 0; q < n; ++q) {
+              ylp[q] += s * ki[q];
+            }
+          }
+        } else {
+          Algebra::assign(y_low_, y);
+          for (int i = 0; i < Tableau::stages; ++i) {
+            const double bi = Tableau::b_low[static_cast<std::size_t>(i)];
+            if (bi != 0.0) {
+              Algebra::axpy(h * bi, k_[static_cast<std::size_t>(i)], y_low_);
+            }
           }
         }
 
-        Algebra::assign(*err_out, y_high);
-        Algebra::axpy(-1.0, y_low_, *err_out);
+        if constexpr (kHasContiguous) {
+          const auto* yhp = y_high.data();
+          const auto* ylp = y_low_.data();
+          auto* ep = err_out->data();
+          for (std::size_t q = 0; q < n; ++q) {
+            ep[q] = yhp[q] - ylp[q];
+          }
+        } else {
+          Algebra::assign(*err_out, y_high);
+          Algebra::axpy(-1.0, y_low_, *err_out);
+        }
 
         if (!Algebra::finite(*err_out)) {
           return false;
