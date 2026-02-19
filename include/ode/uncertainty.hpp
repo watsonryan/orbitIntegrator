@@ -616,6 +616,162 @@ template <class RHS, class JacobianFn>
 }
 
 /**
+ * @brief Square-root covariance measurement update in information-factor form.
+ *
+ * Given:
+ * - prior covariance factor `S_prior` (lower), `P^- = S_prior S_prior^T`
+ * - measurement matrix `H` (`m x n`)
+ * - measurement noise factor `S_r` (lower), `R = S_r S_r^T`
+ *
+ * Computes posterior covariance factor `S_post` (lower) using only factor operations:
+ * 1. `R_prior` such that `R_prior^T R_prior = (P^-)^{-1}`
+ * 2. QR on stacked matrix `[R_prior; S_r^{-1} H]`
+ * 3. recover `S_post` from inverse of the resulting upper-triangular factor.
+ */
+[[nodiscard]] inline DynamicMatrix covariance_measurement_update_sqrt_information(
+    const DynamicMatrix& s_prior,
+    const DynamicMatrix& h_mat,
+    const DynamicMatrix& s_r,
+    std::size_t n,
+    std::size_t m) {
+  if (s_prior.size() != n * n || h_mat.size() != m * n || s_r.size() != m * m || n == 0) {
+    return {};
+  }
+
+  const auto idx_sq = [](std::size_t dim, std::size_t row, std::size_t col) {
+    return row * dim + col;
+  };
+  const auto idx_rect = [](std::size_t cols, std::size_t row, std::size_t col) {
+    return row * cols + col;
+  };
+
+  auto inverse_lower = [&](const DynamicMatrix& l, std::size_t dim, DynamicMatrix& inv_l) -> bool {
+    inv_l.assign(dim * dim, 0.0);
+    for (std::size_t j = 0; j < dim; ++j) {
+      for (std::size_t i = 0; i < dim; ++i) {
+        if (i < j) {
+          continue;
+        }
+        double rhs = (i == j) ? 1.0 : 0.0;
+        for (std::size_t k = j; k < i; ++k) {
+          rhs -= l[idx_sq(dim, i, k)] * inv_l[idx_sq(dim, k, j)];
+        }
+        const double di = l[idx_sq(dim, i, i)];
+        if (!(std::abs(di) > 0.0) || !std::isfinite(di)) {
+          return false;
+        }
+        inv_l[idx_sq(dim, i, j)] = rhs / di;
+        if (!std::isfinite(inv_l[idx_sq(dim, i, j)])) {
+          return false;
+        }
+      }
+    }
+    return true;
+  };
+
+  auto inverse_upper = [&](const DynamicMatrix& u, std::size_t dim, DynamicMatrix& inv_u) -> bool {
+    inv_u.assign(dim * dim, 0.0);
+    for (std::size_t j = 0; j < dim; ++j) {
+      for (int ii = static_cast<int>(dim) - 1; ii >= 0; --ii) {
+        const std::size_t i = static_cast<std::size_t>(ii);
+        if (i > j) {
+          continue;
+        }
+        double rhs = (i == j) ? 1.0 : 0.0;
+        for (std::size_t k = i + 1; k <= j; ++k) {
+          rhs -= u[idx_sq(dim, i, k)] * inv_u[idx_sq(dim, k, j)];
+        }
+        const double di = u[idx_sq(dim, i, i)];
+        if (!(std::abs(di) > 0.0) || !std::isfinite(di)) {
+          return false;
+        }
+        inv_u[idx_sq(dim, i, j)] = rhs / di;
+        if (!std::isfinite(inv_u[idx_sq(dim, i, j)])) {
+          return false;
+        }
+      }
+    }
+    return true;
+  };
+
+  DynamicMatrix inv_s_prior;
+  if (!inverse_lower(s_prior, n, inv_s_prior)) {
+    return {};
+  }
+
+  const DynamicMatrix& r_prior = inv_s_prior;
+
+  DynamicMatrix w_h(m * n, 0.0);
+  for (std::size_t col = 0; col < n; ++col) {
+    for (std::size_t i = 0; i < m; ++i) {
+      double rhs = h_mat[idx_rect(n, i, col)];
+      for (std::size_t k = 0; k < i; ++k) {
+        rhs -= s_r[idx_sq(m, i, k)] * w_h[idx_rect(n, k, col)];
+      }
+      const double di = s_r[idx_sq(m, i, i)];
+      if (!(std::abs(di) > 0.0) || !std::isfinite(di)) {
+        return {};
+      }
+      w_h[idx_rect(n, i, col)] = rhs / di;
+      if (!std::isfinite(w_h[idx_rect(n, i, col)])) {
+        return {};
+      }
+    }
+  }
+
+  const std::size_t rows = n + m;
+  DynamicMatrix t(rows * n, 0.0);
+  for (std::size_t i = 0; i < n; ++i) {
+    for (std::size_t j = 0; j < n; ++j) {
+      t[idx_rect(n, i, j)] = r_prior[idx_sq(n, i, j)];
+    }
+  }
+  for (std::size_t i = 0; i < m; ++i) {
+    for (std::size_t j = 0; j < n; ++j) {
+      t[idx_rect(n, n + i, j)] = w_h[idx_rect(n, i, j)];
+    }
+  }
+
+  DynamicMatrix q(rows * n, 0.0);
+  DynamicMatrix r(n * n, 0.0);
+  for (std::size_t j = 0; j < n; ++j) {
+    std::vector<double> v(rows, 0.0);
+    for (std::size_t rr = 0; rr < rows; ++rr) {
+      v[rr] = t[idx_rect(n, rr, j)];
+    }
+    for (std::size_t i = 0; i < j; ++i) {
+      double rij = 0.0;
+      for (std::size_t rr = 0; rr < rows; ++rr) {
+        rij += q[idx_rect(n, rr, i)] * v[rr];
+      }
+      r[idx_sq(n, i, j)] = rij;
+      for (std::size_t rr = 0; rr < rows; ++rr) {
+        v[rr] -= rij * q[idx_rect(n, rr, i)];
+      }
+    }
+    double nrm2 = 0.0;
+    for (double vv : v) {
+      nrm2 += vv * vv;
+    }
+    const double rjj = std::sqrt(std::max(0.0, nrm2));
+    if (!(rjj > 0.0) || !std::isfinite(rjj)) {
+      return {};
+    }
+    r[idx_sq(n, j, j)] = rjj;
+    for (std::size_t rr = 0; rr < rows; ++rr) {
+      q[idx_rect(n, rr, j)] = v[rr] / rjj;
+    }
+  }
+
+  DynamicMatrix inv_r;
+  if (!inverse_upper(r, n, inv_r)) {
+    return {};
+  }
+
+  return inv_r;
+}
+
+/**
  * @brief Propagate state, STM, and covariance with continuous-time Riccati form.
  *
  * Integrates:

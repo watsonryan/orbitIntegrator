@@ -90,6 +90,14 @@ template <class RHS, class JacobianFn, class ProcessNoiseFn>
   return ode::uncertainty::propagate_covariance_discrete_sqrt(phi, s0, qd, n);
 }
 
+[[nodiscard]] inline Matrix covariance_measurement_update_sqrt_information(const Matrix& s_prior,
+                                                                           const Matrix& h_mat,
+                                                                           const Matrix& s_r,
+                                                                           std::size_t n,
+                                                                           std::size_t m) {
+  return ode::uncertainty::covariance_measurement_update_sqrt_information(s_prior, h_mat, s_r, n, m);
+}
+
 template <class RHS, class JacobianFn>
 [[nodiscard]] inline StateStmResult integrate_state_stm_abm4(RHS&& rhs,
                                                              JacobianFn&& jacobian_fn,

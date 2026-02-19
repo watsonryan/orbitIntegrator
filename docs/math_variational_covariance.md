@@ -43,6 +43,14 @@ Square-root propagation (Cholesky form):
 `P = S S^T`, propagate with
 `P_{k+1} = Phi P_k Phi^T + Q_d`, then refactor to `S_{k+1}`.
 
+Square-root measurement update (information-factor form):
+
+Build stacked matrix
+`T = [R_prior; S_r^{-1} H]`,
+where `R_prior^T R_prior = (P^-)^{-1}` and `R = S_r S_r^T`.
+QR-factorization of `T` yields upper-triangular information factor `R_post`,
+then recover covariance factor `S_post = (R_post^{-1})^T`.
+
 ## AD Jacobian Support
 
 This repo provides forward-mode AD helpers to compute `A = df/dx` from a generic RHS, reducing manual Jacobian derivation burden.
@@ -56,6 +64,7 @@ Implemented verification includes:
 - Continuous-time covariance propagation vs one-step discrete approximation at small `dt`
 - Joseph-form symmetry/PSD validation checks
 - Square-root propagation consistency against direct covariance propagation
+- Square-root information measurement update consistency against Joseph form
 
 ## API Namespaces
 

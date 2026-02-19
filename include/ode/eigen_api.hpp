@@ -12,6 +12,7 @@
 #if __has_include(<Eigen/Core>)
 #include <Eigen/Core>
 #include <Eigen/Cholesky>
+#include <Eigen/QR>
 #include <unsupported/Eigen/AutoDiff>
 #else
 #error "Eigen headers not found. Install Eigen >= 5 and/or enable ODE_FETCH_DEPS."
@@ -319,6 +320,38 @@ template <class RHS, class JacobianFn, class ProcessNoiseFn>
   return llt.matrixL();
 }
 
+[[nodiscard]] inline Matrix covariance_measurement_update_sqrt_information(const Matrix& s_prior,
+                                                                           const Matrix& h_mat,
+                                                                           const Matrix& s_r) {
+  if (s_prior.rows() != s_prior.cols() || h_mat.cols() != s_prior.cols() || s_r.rows() != s_r.cols() ||
+      s_r.rows() != h_mat.rows()) {
+    return Matrix{};
+  }
+  const int n = static_cast<int>(s_prior.rows());
+  const int m = static_cast<int>(h_mat.rows());
+  if (n == 0) {
+    return Matrix{};
+  }
+
+  const Matrix r_prior = s_prior.triangularView<Eigen::Lower>().solve(Matrix::Identity(n, n));
+  const Matrix w_h = s_r.triangularView<Eigen::Lower>().solve(h_mat);
+
+  Matrix t(n + m, n);
+  t.topRows(n) = r_prior;
+  t.bottomRows(m) = w_h;
+
+  Eigen::HouseholderQR<Matrix> qr(t);
+  Matrix r = qr.matrixQR().topLeftCorner(n, n).template triangularView<Eigen::Upper>();
+  for (int i = 0; i < n; ++i) {
+    if (r(i, i) < 0.0) {
+      r.row(i) *= -1.0;
+    }
+  }
+
+  const Matrix inv_r = r.triangularView<Eigen::Upper>().solve(Matrix::Identity(n, n));
+  return inv_r;
+}
+
 }  // namespace uncertainty
 
 namespace variational {
@@ -381,6 +414,12 @@ template <class RHS, class JacobianFn, class ProcessNoiseFn>
                                                                const Matrix& s0,
                                                                const Matrix& qd) {
   return uncertainty::propagate_covariance_discrete_sqrt(phi, s0, qd);
+}
+
+[[nodiscard]] inline Matrix covariance_measurement_update_sqrt_information(const Matrix& s_prior,
+                                                                           const Matrix& h_mat,
+                                                                           const Matrix& s_r) {
+  return uncertainty::covariance_measurement_update_sqrt_information(s_prior, h_mat, s_r);
 }
 }  // namespace variational
 }  // namespace ode::eigen
