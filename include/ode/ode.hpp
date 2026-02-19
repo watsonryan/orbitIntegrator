@@ -9,6 +9,7 @@
 #include "ode/integrate_method.hpp"
 #include "ode/multistep/gauss_jackson8.hpp"
 #include "ode/poincare.hpp"
+#include "ode/regularization.hpp"
 #include "ode/symplectic.hpp"
 #include "ode/sundman.hpp"
 #include "ode/tableaus/rk4.hpp"
