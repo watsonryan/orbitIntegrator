@@ -7,12 +7,15 @@ C++20 ODE integration toolkit with explicit RK, multistep, stiffness helpers, an
 - Multistep methods: ABM4, ABM6, Nordsieck-style adaptive Adams
 - Gauss-Jackson-style second-order multistep integrator
 - Optional Sundman-transformed stepping mode (`integrate_sundman`)
+- Regularization module (`ode::regularization`): Sundman-Cowell, Levi-Civita (2D), KS (3D)
 - Dense output recording and event detection wrapper
 - Separate stiff module (`ode::stiff::integrate_implicit_euler`)
 - Uncertainty/variational propagation (`ode::uncertainty`) for STM and covariance
 - Forward-mode AD Jacobian helpers
 - Batch propagation helpers with reusable workspace (`ode::integrate_batch`)
 - Stiffness diagnostics helper (`ode::stiff::assess_stiffness`)
+- Poincare section tools and periodic-orbit differential correction (`ode::poincare`)
+- Chaos indicators (FLI/MEGNO, `ode::chaos`)
 - Eigen-first convenience API (`ode/eigen_api.hpp`, Eigen >= 5.0)
 
 ## Architecture
@@ -40,6 +43,9 @@ flowchart TD
   B --> S[Eigen API wrappers]
   B --> T[Batch propagation helpers]
   B --> U[Variational aliases]
+  B --> V[Regularization module]
+  B --> W[Poincare and periodic-orbit tools]
+  B --> X[Chaos indicators]
 ```
 
 ## Mathematical docs
@@ -49,6 +55,7 @@ flowchart TD
 - `docs/math_multistep.md`
 - `docs/math_variational_covariance.md`
 - `docs/math_stiffness.md`
+- `docs/math_regularization.md`
 - `docs/math_verification.md`
 
 ## Build and test
@@ -143,6 +150,53 @@ auto dt_ds = [](double t, const State& y) {
   return 1.0 + 0.01 * std::abs(y[0]);  // positive scale
 };
 auto res = ode::integrate_sundman(ode::RKMethod::RKF78, rhs, dt_ds, t0, y0, t1, opt);
+```
+
+Regularization API:
+
+```cpp
+#include <ode/regularization.hpp>
+
+constexpr double mu = 398600.4418;
+ode::regularization::TwoBody2DState s0{7000.0, 0.0, 0.0, 7.5};
+ode::regularization::RegularizationOptions ropt;
+ropt.ds = 1e-4;
+
+auto lc = ode::regularization::integrate_two_body_levi_civita(mu, 0.0, s0, 3600.0, ropt);
+auto su = ode::regularization::integrate_two_body_sundman(mu, ode::RKMethod::RKF78, 0.0, s0, 3600.0, opt);
+```
+
+KS (3D):
+
+```cpp
+ode::regularization::TwoBody3DState s03{9000.0, 500.0, 1000.0, -1.0, 6.6, 0.8};
+auto ks = ode::regularization::integrate_two_body_ks(mu, 0.0, s03, 7200.0, ropt);
+```
+
+Full Cowell dynamics with regularized Sundman stepping (recommended production path for perturbed models):
+
+```cpp
+auto accel3d = [](double t, const ode::regularization::TwoBody3DState& s, std::array<double,3>& a) {
+  // Fill with full force model acceleration: central + J2 + drag + SRP + ...
+};
+auto cowl_reg = ode::regularization::integrate_cowell_sundman_3d(
+    accel3d, ode::RKMethod::RKF78, t0, s03, t1, opt, 1e-9);
+```
+
+Poincare and periodic-orbit tools:
+
+```cpp
+#include <ode/poincare.hpp>
+auto sec = ode::poincare::integrate_poincare<State>(
+    ode::RKMethod::RKF78, rhs, section_fn, t0, y0, t1, opt, 20);
+```
+
+Chaos indicators:
+
+```cpp
+#include <ode/chaos.hpp>
+auto fli = ode::chaos::compute_fli(ode::RKMethod::RKF78, rhs, jac, t0, x0, delta0, t1, opt);
+auto meg = ode::chaos::compute_megno(ode::RKMethod::RKF78, rhs, jac, t0, x0, delta0, t1, opt);
 ```
 
 Dense output + events:
@@ -342,6 +396,22 @@ Columns:
 Optional overrides:
 - `ODE_COMPARE_SAMPLES`
 - `ODE_COMPARE_ITERATIONS`
+
+## Regularization benchmark
+
+Build and run:
+
+```bash
+cmake --preset macos-debug -DODE_FETCH_DEPS=ON
+cmake --build --preset macos-debug -j
+./build/macos-debug/ode_regularization_benchmark
+```
+
+Comparison example:
+
+```bash
+./build/macos-debug/ode_regularization_compare_example
+```
 
 ## Tests included
 
