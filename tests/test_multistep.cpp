@@ -3,6 +3,7 @@
 #include <vector>
 
 #include "ode/multistep/adams_bashforth_moulton.hpp"
+#include "ode/multistep/adams_high_order.hpp"
 #include "ode/ode.hpp"
 
 int main() {
@@ -29,6 +30,30 @@ int main() {
     const double err = std::abs(res.y[0] - std::exp(1.0));
     if (err > 1e-7) {
       std::cerr << "ABM4 forward error too large: " << err << "\n";
+      return 1;
+    }
+  }
+
+  {
+    const State y0{1.0};
+    ode::multistep::AdamsBashforthMoultonOptions abm4_opt;
+    abm4_opt.h = 0.02;
+    abm4_opt.mode = ode::multistep::PredictorCorrectorMode::Iterated;
+    abm4_opt.corrector_iterations = 2;
+
+    ode::multistep::AdamsBashforthMoultonOptions abm6_opt = abm4_opt;
+
+    const auto abm4 = ode::multistep::integrate_abm4(rhs, 0.0, y0, 1.0, abm4_opt);
+    const auto abm6 = ode::multistep::integrate_abm6(rhs, 0.0, y0, 1.0, abm6_opt);
+    if (abm4.status != ode::IntegratorStatus::Success || abm6.status != ode::IntegratorStatus::Success) {
+      std::cerr << "ABM4/ABM6 run failed\n";
+      return 1;
+    }
+    const double exact = std::exp(1.0);
+    const double e4 = std::abs(abm4.y[0] - exact);
+    const double e6 = std::abs(abm6.y[0] - exact);
+    if (!(e6 < e4)) {
+      std::cerr << "Expected ABM6 to be more accurate than ABM4: e4=" << e4 << " e6=" << e6 << "\n";
       return 1;
     }
   }

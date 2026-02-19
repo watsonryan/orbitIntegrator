@@ -85,6 +85,10 @@ if(ODE_BUILD_TESTS)
   target_link_libraries(ode_test_multistep PRIVATE ode)
   add_test(NAME ode_test_multistep COMMAND ode_test_multistep)
 
+  add_executable(ode_test_nordsieck tests/test_nordsieck.cpp)
+  target_link_libraries(ode_test_nordsieck PRIVATE ode)
+  add_test(NAME ode_test_nordsieck COMMAND ode_test_nordsieck)
+
   add_executable(ode_perf_benchmark tests/ode_perf_benchmark.cpp)
   target_link_libraries(ode_perf_benchmark PRIVATE ode)
 
