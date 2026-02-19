@@ -15,8 +15,7 @@ if(ODE_FETCH_DEPS)
 
   CPMAddPackage(
     NAME spdlog
-    GIT_REPOSITORY https://github.com/gabime/spdlog.git
-    GIT_TAG v1.17.0
+    URL https://github.com/gabime/spdlog/archive/refs/tags/v1.17.0.tar.gz
     OPTIONS "SPDLOG_BUILD_TESTS OFF" "SPDLOG_BUILD_EXAMPLE OFF" "SPDLOG_BUILD_BENCH OFF" "SPDLOG_FMT_EXTERNAL ON"
   )
 
