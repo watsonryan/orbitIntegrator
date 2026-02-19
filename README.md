@@ -7,6 +7,9 @@ C++20 explicit Runge-Kutta integrator for non-stiff ODEs:
 - RKF45 (embedded adaptive 4(5), fixed-step using high-order solution also supported)
 - RKF78 (embedded adaptive 7(8), fixed-step using high-order solution also supported)
 - RK8 alias (fixed-step using RKF78 high-order weights)
+- Optional Sundman-transformed stepping mode (`integrate_sundman`)
+- Dense output recording and simple event detection wrapper
+- Separate stiff module (`ode::stiff::integrate_implicit_euler`)
 
 ## Architecture
 
@@ -23,6 +26,9 @@ flowchart TD
   F --> I[RKF78 tableau]
   E --> J[Error norm and step-size controller]
   E --> K[Integration result and stats]
+  B --> L[Dense and event wrapper]
+  B --> M[Sundman wrapper]
+  B --> N[Stiff module]
 ```
 
 ## Build and test
@@ -101,6 +107,34 @@ Compile-time tableau selection:
 auto res = ode::integrate_with_tableau<ode::TableauRKF45>(rhs, t0, y0, t1, opt);
 ```
 
+Optional Sundman mode (`dt/ds` provided by caller):
+
+```cpp
+auto dt_ds = [](double t, const State& y) {
+  (void)t;
+  return 1.0 + 0.01 * std::abs(y[0]);  // positive scale
+};
+auto res = ode::integrate_sundman(ode::RKMethod::RKF78, rhs, dt_ds, t0, y0, t1, opt);
+```
+
+Dense output + events:
+
+```cpp
+ode::DenseOutputOptions<State> dense_opt{};
+dense_opt.uniform_sample_dt = 0.1;
+ode::EventOptions<State> event_opt{};
+event_opt.function = [](double, const State& y) { return y[0] - 0.5; };
+auto out = ode::integrate_with_dense_events(ode::RKMethod::RKF45, rhs, t0, y0, t1, opt, dense_opt, event_opt);
+```
+
+Stiff module example:
+
+```cpp
+#include <ode/stiff/implicit_euler.hpp>
+std::vector<double> y0{1.0};
+auto stiff_res = ode::stiff::integrate_implicit_euler(rhs_stiff, 0.0, y0, 1.0);
+```
+
 ## Simple 2-body orbital example
 
 Build and run:
@@ -122,6 +156,16 @@ tools/profile.sh
 Optional overrides:
 - `ODE_PERF_SAMPLES`
 - `ODE_PERF_ITERATIONS`
+
+## Tests included
+
+- order checks (`RK4`, `RKF45`, `RKF78`, `RK8`)
+- adaptive behavior and backward integration
+- robustness guards (`NaN`, `max_steps`, endpoint clamp, underflow path)
+- algebra adapters (`std::array`, custom accessor algebra)
+- dense output + event handling
+- stiff module smoke/regression
+- install/package-consumer smoke
 
 ## API docs (Doxygen)
 
