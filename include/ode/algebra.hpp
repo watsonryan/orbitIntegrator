@@ -7,6 +7,7 @@
 #include <cmath>
 #include <concepts>
 #include <cstddef>
+#include <algorithm>
 
 namespace ode {
 
@@ -24,22 +25,38 @@ struct DefaultAlgebra {
   static void assign(State& dst, const State& src) { dst = src; }
 
   static void set_zero(State& x) {
-    for (auto& v : x) {
-      v = 0.0;
-    }
+    std::fill(x.begin(), x.end(), 0.0);
   }
 
   static void axpy(double a, const State& x, State& y) {
     const auto n = size(y);
-    for (std::size_t i = 0; i < n; ++i) {
-      y[i] += a * x[i];
+    if constexpr (requires { x.data(); y.data(); }) {
+      const auto* xp = x.data();
+      auto* yp = y.data();
+      for (std::size_t i = 0; i < n; ++i) {
+        yp[i] += a * xp[i];
+      }
+    } else {
+      for (std::size_t i = 0; i < n; ++i) {
+        y[i] += a * x[i];
+      }
     }
   }
 
   static bool finite(const State& x) {
-    for (const auto v : x) {
-      if (!std::isfinite(v)) {
-        return false;
+    const auto n = size(x);
+    if constexpr (requires { x.data(); }) {
+      const auto* xp = x.data();
+      for (std::size_t i = 0; i < n; ++i) {
+        if (!std::isfinite(xp[i])) {
+          return false;
+        }
+      }
+    } else {
+      for (const auto v : x) {
+        if (!std::isfinite(v)) {
+          return false;
+        }
       }
     }
     return true;

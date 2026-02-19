@@ -24,10 +24,21 @@ requires AlgebraFor<Algebra, State>
     return 0.0;
   }
   double acc = 0.0;
-  for (std::size_t i = 0; i < n; ++i) {
-    const double scale = atol + rtol * std::max(std::abs(y[i]), std::abs(y_high[i]));
-    const double ratio = err[i] / scale;
-    acc += ratio * ratio;
+  if constexpr (requires { y.data(); y_high.data(); err.data(); }) {
+    const auto* yp = y.data();
+    const auto* yh = y_high.data();
+    const auto* ep = err.data();
+    for (std::size_t i = 0; i < n; ++i) {
+      const double scale = atol + rtol * std::max(std::abs(yp[i]), std::abs(yh[i]));
+      const double ratio = ep[i] / scale;
+      acc += ratio * ratio;
+    }
+  } else {
+    for (std::size_t i = 0; i < n; ++i) {
+      const double scale = atol + rtol * std::max(std::abs(y[i]), std::abs(y_high[i]));
+      const double ratio = err[i] / scale;
+      acc += ratio * ratio;
+    }
   }
   return std::sqrt(acc / static_cast<double>(n));
 }
