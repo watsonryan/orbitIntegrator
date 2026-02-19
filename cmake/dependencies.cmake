@@ -13,6 +13,13 @@ if(ODE_FETCH_DEPS)
     OPTIONS "FMT_TEST OFF" "FMT_DOC OFF" "FMT_INSTALL ON"
   )
 
+  CPMAddPackage(
+    NAME spdlog
+    GIT_REPOSITORY https://github.com/gabime/spdlog.git
+    GIT_TAG v1.14.1
+    OPTIONS "SPDLOG_BUILD_TESTS OFF" "SPDLOG_BUILD_EXAMPLE OFF" "SPDLOG_BUILD_BENCH OFF" "SPDLOG_FMT_EXTERNAL ON"
+  )
+
   if(ODE_ENABLE_EIGEN)
     CPMAddPackage(
       NAME eigen
@@ -23,6 +30,7 @@ if(ODE_FETCH_DEPS)
   endif()
 else()
   find_package(fmt CONFIG QUIET)
+  find_package(spdlog CONFIG QUIET)
 endif()
 
 if(NOT TARGET fmt::fmt)
@@ -43,4 +51,8 @@ if(ODE_ENABLE_EIGEN)
   if(NOT TARGET Eigen3::Eigen)
     message(WARNING "Eigen >= 5.0 not found. Set ODE_FETCH_DEPS=ON or install Eigen 5.x to enable Eigen APIs.")
   endif()
+endif()
+
+if(NOT TARGET spdlog::spdlog AND NOT TARGET spdlog::spdlog_header_only)
+  message(FATAL_ERROR "spdlog is required. Set ODE_FETCH_DEPS=ON or install spdlog.")
 endif()

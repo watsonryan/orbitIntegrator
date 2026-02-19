@@ -24,6 +24,13 @@ target_include_directories(ode INTERFACE
   $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/include>
   $<INSTALL_INTERFACE:${CMAKE_INSTALL_INCLUDEDIR}>
 )
+if(TARGET spdlog::spdlog)
+  target_link_libraries(ode INTERFACE spdlog::spdlog)
+elseif(TARGET spdlog::spdlog_header_only)
+  target_link_libraries(ode INTERFACE spdlog::spdlog_header_only)
+else()
+  message(FATAL_ERROR "spdlog target not available after dependency resolution.")
+endif()
 
 if (MSVC)
   target_compile_options(ode INTERFACE /W4 $<$<BOOL:${ODE_WERROR}>:/WX>)
