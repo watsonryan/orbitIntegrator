@@ -154,6 +154,10 @@ if(ODE_BUILD_TESTS)
   target_link_libraries(ode_test_symplectic PRIVATE ode)
   add_test(NAME ode_test_symplectic COMMAND ode_test_symplectic)
 
+  add_executable(ode_test_symplectic_advanced tests/test_symplectic_advanced.cpp)
+  target_link_libraries(ode_test_symplectic_advanced PRIVATE ode)
+  add_test(NAME ode_test_symplectic_advanced COMMAND ode_test_symplectic_advanced)
+
   add_executable(ode_test_nordsieck tests/test_nordsieck.cpp)
   target_link_libraries(ode_test_nordsieck PRIVATE ode)
   add_test(NAME ode_test_nordsieck COMMAND ode_test_nordsieck)
@@ -173,6 +177,14 @@ if(ODE_BUILD_TESTS)
   add_executable(ode_test_invariant_controller tests/test_invariant_controller.cpp)
   target_link_libraries(ode_test_invariant_controller PRIVATE ode)
   add_test(NAME ode_test_invariant_controller COMMAND ode_test_invariant_controller)
+
+  add_executable(ode_test_poincare_tools tests/test_poincare_tools.cpp)
+  target_link_libraries(ode_test_poincare_tools PRIVATE ode)
+  add_test(NAME ode_test_poincare_tools COMMAND ode_test_poincare_tools)
+
+  add_executable(ode_test_chaos_indicators tests/test_chaos_indicators.cpp)
+  target_link_libraries(ode_test_chaos_indicators PRIVATE ode)
+  add_test(NAME ode_test_chaos_indicators COMMAND ode_test_chaos_indicators)
 
   add_executable(ode_perf_benchmark tests/ode_perf_benchmark.cpp)
   target_link_libraries(ode_perf_benchmark PRIVATE ode $<$<TARGET_EXISTS:fmt::fmt>:fmt::fmt>)
