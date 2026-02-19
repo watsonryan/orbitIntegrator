@@ -169,6 +169,31 @@ Optional overrides:
 - `ODE_PERF_SAMPLES`
 - `ODE_PERF_ITERATIONS`
 
+## Method comparison benchmark
+
+Build and run:
+
+```bash
+cmake --preset macos-debug
+cmake --build --preset macos-debug -j
+./build/macos-debug/ode_method_compare_benchmark
+```
+
+This prints a side-by-side comparison for:
+- `RKF78(adaptive)`
+- `ABM4(fixed)`
+- `Sundman+RKF78`
+
+Columns:
+- `runs/sec` (throughput)
+- `mean_abs_err` (mean terminal absolute error vs analytic reference)
+- `mean_steps` (accepted steps)
+- `mean_rhs` (RHS evaluations)
+
+Optional overrides:
+- `ODE_COMPARE_SAMPLES`
+- `ODE_COMPARE_ITERATIONS`
+
 ## Tests included
 
 - order checks (`RK4`, `RKF45`, `RKF78`, `RK8`)

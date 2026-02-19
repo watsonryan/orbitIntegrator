@@ -88,6 +88,9 @@ if(ODE_BUILD_TESTS)
   add_executable(ode_perf_benchmark tests/ode_perf_benchmark.cpp)
   target_link_libraries(ode_perf_benchmark PRIVATE ode)
 
+  add_executable(ode_method_compare_benchmark tests/ode_method_compare_benchmark.cpp)
+  target_link_libraries(ode_method_compare_benchmark PRIVATE ode)
+
   add_test(
     NAME ode_package_install_smoke
     COMMAND ${CMAKE_COMMAND}
