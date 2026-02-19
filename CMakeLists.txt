@@ -73,6 +73,34 @@ if(ODE_BUILD_TESTS)
   target_link_libraries(ode_test_canonical_systems PRIVATE ode)
   add_test(NAME ode_test_canonical_systems COMMAND ode_test_canonical_systems)
 
+  add_executable(ode_test_richardson tests/test_richardson.cpp)
+  target_link_libraries(ode_test_richardson PRIVATE ode)
+  add_test(NAME ode_test_richardson COMMAND ode_test_richardson)
+
+  add_executable(ode_test_reversibility tests/test_reversibility.cpp)
+  target_link_libraries(ode_test_reversibility PRIVATE ode)
+  add_test(NAME ode_test_reversibility COMMAND ode_test_reversibility)
+
+  add_executable(ode_test_stability_region tests/test_stability_region.cpp)
+  target_link_libraries(ode_test_stability_region PRIVATE ode)
+  add_test(NAME ode_test_stability_region COMMAND ode_test_stability_region)
+
+  add_executable(ode_test_stiff_diagnostics tests/test_stiff_diagnostics.cpp)
+  target_link_libraries(ode_test_stiff_diagnostics PRIVATE ode)
+  add_test(NAME ode_test_stiff_diagnostics COMMAND ode_test_stiff_diagnostics)
+
+  add_executable(ode_test_variational_fd_stm tests/test_variational_fd_stm.cpp)
+  target_link_libraries(ode_test_variational_fd_stm PRIVATE ode)
+  add_test(NAME ode_test_variational_fd_stm COMMAND ode_test_variational_fd_stm)
+
+  add_executable(ode_test_covariance_math tests/test_covariance_math.cpp)
+  target_link_libraries(ode_test_covariance_math PRIVATE ode)
+  add_test(NAME ode_test_covariance_math COMMAND ode_test_covariance_math)
+
+  add_executable(ode_test_long_horizon_invariants tests/test_long_horizon_invariants.cpp)
+  target_link_libraries(ode_test_long_horizon_invariants PRIVATE ode)
+  add_test(NAME ode_test_long_horizon_invariants COMMAND ode_test_long_horizon_invariants)
+
   add_executable(ode_test_state_array tests/test_state_array.cpp)
   target_link_libraries(ode_test_state_array PRIVATE ode)
   add_test(NAME ode_test_state_array COMMAND ode_test_state_array)
@@ -94,6 +122,10 @@ if(ODE_BUILD_TESTS)
   add_executable(ode_test_dense_events tests/test_dense_events.cpp)
   target_link_libraries(ode_test_dense_events PRIVATE ode)
   add_test(NAME ode_test_dense_events COMMAND ode_test_dense_events)
+
+  add_executable(ode_test_dense_output_accuracy tests/test_dense_output_accuracy.cpp)
+  target_link_libraries(ode_test_dense_output_accuracy PRIVATE ode)
+  add_test(NAME ode_test_dense_output_accuracy COMMAND ode_test_dense_output_accuracy)
 
   add_executable(ode_test_stiff tests/test_stiff.cpp)
   target_link_libraries(ode_test_stiff PRIVATE ode)
