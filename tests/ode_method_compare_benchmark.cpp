@@ -152,11 +152,13 @@ MethodMetrics RunNordsieckAbm4(int total_runs, const State& y0) {
   auto rhs = MakeRhs();
 
   ode::multistep::NordsieckAbmOptions opt;
-  opt.rtol = 1e-8;
-  opt.atol = 1e-12;
+  opt.rtol = 1e-7;
+  opt.atol = 1e-10;
   opt.h_init = 0.01;
   opt.h_min = 1e-8;
   opt.h_max = 0.2;
+  opt.segment_steps = 4;
+  opt.max_restarts = 32;
 
   double err_sum = 0.0;
   double steps_sum = 0.0;
@@ -177,6 +179,40 @@ MethodMetrics RunNordsieckAbm4(int total_runs, const State& y0) {
 
   const double sec = std::chrono::duration<double>(t1 - t0).count();
   return MethodMetrics{"Nordsieck-ABM4", sec, total_runs / sec, err_sum / total_runs, steps_sum / total_runs,
+                       rhs_sum / total_runs};
+}
+
+MethodMetrics RunNordsieckAbm6(int total_runs, const State& y0) {
+  auto rhs = MakeRhs();
+
+  ode::multistep::NordsieckAbmOptions opt;
+  opt.rtol = 1e-10;
+  opt.atol = 1e-13;
+  opt.h_init = 0.005;
+  opt.h_min = 1e-8;
+  opt.h_max = 0.05;
+  opt.segment_steps = 4;
+  opt.max_restarts = 64;
+
+  double err_sum = 0.0;
+  double steps_sum = 0.0;
+  double rhs_sum = 0.0;
+
+  const auto t0 = std::chrono::steady_clock::now();
+  for (int i = 0; i < total_runs; ++i) {
+    const auto res = ode::multistep::integrate_nordsieck_abm6(rhs, kT0, y0, kT1, opt);
+    if (res.status != ode::IntegratorStatus::Success) {
+      ode::log::Error("Nordsieck ABM6 run failed, status=", ode::ToString(res.status));
+      std::exit(1);
+    }
+    err_sum += std::abs(res.y[0] - ExactSolution(kT1));
+    steps_sum += static_cast<double>(res.stats.accepted_steps);
+    rhs_sum += static_cast<double>(res.stats.rhs_evals);
+  }
+  const auto t1 = std::chrono::steady_clock::now();
+
+  const double sec = std::chrono::duration<double>(t1 - t0).count();
+  return MethodMetrics{"Nordsieck-ABM6", sec, total_runs / sec, err_sum / total_runs, steps_sum / total_runs,
                        rhs_sum / total_runs};
 }
 
@@ -240,6 +276,7 @@ int main() {
   const auto abm_iter = RunAbm4(total_runs, y0, ode::multistep::PredictorCorrectorMode::Iterated, 2, "ABM4-Iter2");
   const auto abm6_iter = RunAbm6(total_runs, y0);
   const auto nord = RunNordsieckAbm4(total_runs, y0);
+  const auto nord6 = RunNordsieckAbm6(total_runs, y0);
   const auto sund = RunSundmanRkf78(total_runs, y0);
 
   std::cout << "method             runs/sec    mean_abs_err   mean_steps   mean_rhs\n";
@@ -249,6 +286,7 @@ int main() {
   PrintRow(abm_iter);
   PrintRow(abm6_iter);
   PrintRow(nord);
+  PrintRow(nord6);
   PrintRow(sund);
 
   return 0;

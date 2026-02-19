@@ -242,6 +242,7 @@ ode::multistep::NordsieckAbmOptions nopt;
 nopt.rtol = 1e-8;
 nopt.atol = 1e-12;
 auto nres = ode::multistep::integrate_nordsieck_abm4(rhs, t0, y0, t1, nopt);
+auto nres6 = ode::multistep::integrate_nordsieck_abm6(rhs, t0, y0, t1, nopt);
 ```
 
 Gauss-Jackson-style second-order integration:
@@ -297,6 +298,9 @@ Variational aliases (model-agnostic naming):
 #include <ode/variational.hpp>
 auto out = ode::variational::integrate_state_stm_cov(
     ode::RKMethod::RKF78, rhs, jacobian, q_fn, t0, x0, p0, t1, opt);
+
+auto out_nordsieck = ode::variational::integrate_state_stm_cov_nordsieck_abm6(
+    rhs, jacobian, q_fn, t0, x0, p0, t1, nopt);
 ```
 
 Batch propagation:
@@ -385,6 +389,7 @@ This prints a side-by-side comparison for:
 - `ABM4-Iter2`
 - `ABM6-Iter2`
 - `Nordsieck-ABM4`
+- `Nordsieck-ABM6`
 - `Sundman+RKF78`
 
 Columns:
