@@ -216,6 +216,14 @@ cmake --build --preset macos-debug -j
 
 This integrates a circular LEO two-body problem for approximately one orbital period and prints final state and step stats.
 
+Uncertainty-enabled two-body example (state + STM + covariance):
+
+```bash
+cmake --preset macos-debug
+cmake --build --preset macos-debug -j
+./build/macos-debug/ode_two_body_uncertainty_example
+```
+
 ## Profiling
 
 ```bash
