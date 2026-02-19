@@ -254,6 +254,50 @@ struct RegularizationResult3D {
   return out;
 }
 
+template <class Accel2DFn>
+[[nodiscard]] inline RegularizationResult integrate_cowell_sundman_2d(
+    Accel2DFn&& acceleration,
+    RKMethod method,
+    double t0,
+    const TwoBody2DState& s0,
+    double t1,
+    IntegratorOptions opt,
+    double min_radius_km = 1e-12) {
+  RegularizationResult out{};
+  out.t = t0;
+  out.state = s0;
+  if (!(min_radius_km > 0.0)) {
+    out.status = IntegratorStatus::InvalidStepSize;
+    return out;
+  }
+
+  std::vector<double> y0{s0.x, s0.y, s0.vx, s0.vy};
+  auto rhs = [&](double t, const std::vector<double>& y, std::vector<double>& dydt) {
+    dydt.assign(4, 0.0);
+    std::array<double, 2> a{};
+    const TwoBody2DState s{y[0], y[1], y[2], y[3]};
+    acceleration(t, s, a);
+    dydt[0] = y[2];
+    dydt[1] = y[3];
+    dydt[2] = a[0];
+    dydt[3] = a[1];
+  };
+
+  auto dt_ds = [min_radius_km](double, const std::vector<double>& y) {
+    const double r = std::sqrt(y[0] * y[0] + y[1] * y[1]);
+    return std::max(min_radius_km, r);
+  };
+
+  const auto res = ode::integrate_sundman(method, rhs, dt_ds, t0, y0, t1, opt);
+  out.status = res.status;
+  out.t = res.t;
+  out.stats = res.stats;
+  if (res.y.size() == 4) {
+    out.state = {res.y[0], res.y[1], res.y[2], res.y[3]};
+  }
+  return out;
+}
+
 [[nodiscard]] inline bool to_ks(const TwoBody3DState& s,
                                 std::array<double, 4>& u,
                                 std::array<double, 4>& up) {
@@ -414,6 +458,52 @@ struct RegularizationResult3D {
   }
 
   out.status = IntegratorStatus::MaxStepsExceeded;
+  return out;
+}
+
+template <class Accel3DFn>
+[[nodiscard]] inline RegularizationResult3D integrate_cowell_sundman_3d(
+    Accel3DFn&& acceleration,
+    RKMethod method,
+    double t0,
+    const TwoBody3DState& s0,
+    double t1,
+    IntegratorOptions opt,
+    double min_radius_km = 1e-12) {
+  RegularizationResult3D out{};
+  out.t = t0;
+  out.state = s0;
+  if (!(min_radius_km > 0.0)) {
+    out.status = IntegratorStatus::InvalidStepSize;
+    return out;
+  }
+
+  std::vector<double> y0{s0.x, s0.y, s0.z, s0.vx, s0.vy, s0.vz};
+  auto rhs = [&](double t, const std::vector<double>& y, std::vector<double>& dydt) {
+    dydt.assign(6, 0.0);
+    std::array<double, 3> a{};
+    const TwoBody3DState s{y[0], y[1], y[2], y[3], y[4], y[5]};
+    acceleration(t, s, a);
+    dydt[0] = y[3];
+    dydt[1] = y[4];
+    dydt[2] = y[5];
+    dydt[3] = a[0];
+    dydt[4] = a[1];
+    dydt[5] = a[2];
+  };
+
+  auto dt_ds = [min_radius_km](double, const std::vector<double>& y) {
+    const double r = std::sqrt(y[0] * y[0] + y[1] * y[1] + y[2] * y[2]);
+    return std::max(min_radius_km, r);
+  };
+
+  const auto res = ode::integrate_sundman(method, rhs, dt_ds, t0, y0, t1, opt);
+  out.status = res.status;
+  out.t = res.t;
+  out.stats = res.stats;
+  if (res.y.size() == 6) {
+    out.state = {res.y[0], res.y[1], res.y[2], res.y[3], res.y[4], res.y[5]};
+  }
   return out;
 }
 
