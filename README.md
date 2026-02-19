@@ -15,6 +15,7 @@ C++20 explicit Runge-Kutta integrator for non-stiff ODEs:
 - Nordsieck-style adaptive Adams (`ode::multistep::integrate_nordsieck_abm4`)
 - Uncertainty propagation module (`ode::uncertainty`) for STM and covariance
 - Forward-mode AD Jacobian helper (`ode::uncertainty::jacobian_forward_ad`)
+- Eigen-first convenience API (`ode/eigen_api.hpp`, Eigen >= 5.0)
 
 ## Architecture
 
@@ -38,12 +39,21 @@ flowchart TD
   B --> P[Multistep ABM6 module]
   B --> Q[Nordsieck adaptive ABM module]
   B --> R[Uncertainty STM and covariance module]
+  B --> S[Eigen API wrappers]
 ```
 
 ## Build and test
 
 ```bash
 cmake --preset macos-debug
+cmake --build --preset macos-debug -j
+ctest --preset macos-debug --output-on-failure
+```
+
+Fetch third-party deps (fmt + Eigen 5.0.1) with CPM:
+
+```bash
+cmake --preset macos-debug -DODE_FETCH_DEPS=ON
 cmake --build --preset macos-debug -j
 ctest --preset macos-debug --output-on-failure
 ```
@@ -202,6 +212,25 @@ ode::IntegratorOptions opt;
 
 auto out = ode::uncertainty::integrate_state_stm_cov(
     ode::RKMethod::RKF78, dynamics, jac_ad, q_const, 0.0, x0, p0, 10.0, opt);
+```
+
+Eigen-first API:
+
+```cpp
+#include <ode/eigen_api.hpp>
+
+using Vec = ode::eigen::Vector;
+Vec y0(2);
+y0 << 1.0, 0.0;
+
+auto rhs = [](double, const Vec& y, Vec& dydt) {
+  dydt.resize(2);
+  dydt(0) = y(1);
+  dydt(1) = -y(0);
+};
+
+ode::IntegratorOptions opt;
+auto res = ode::eigen::integrate(ode::RKMethod::RKF78, rhs, 0.0, y0, 6.283185307179586, opt);
 ```
 
 ## Simple 2-body orbital example
