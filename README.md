@@ -253,6 +253,14 @@ cmake --build --preset macos-debug -j
 ./build/macos-debug/ode_two_body_uncertainty_example
 ```
 
+Cowell force-model example (modular perturbation stack: gravity + J2 + drag + SRP + relativity + tidal):
+
+```bash
+cmake --preset macos-debug -DODE_FETCH_DEPS=ON
+cmake --build --preset macos-debug -j
+./build/macos-debug/ode_cowell_force_model_example
+```
+
 ## Profiling
 
 ```bash
