@@ -13,6 +13,8 @@ C++20 explicit Runge-Kutta integrator for non-stiff ODEs:
 - Separate multistep module (`ode::multistep::integrate_abm4`)
 - Higher-order Adams method (`ode::multistep::integrate_abm6`)
 - Nordsieck-style adaptive Adams (`ode::multistep::integrate_nordsieck_abm4`)
+- Uncertainty propagation module (`ode::uncertainty`) for STM and covariance
+- Forward-mode AD Jacobian helper (`ode::uncertainty::jacobian_forward_ad`)
 
 ## Architecture
 
@@ -35,6 +37,7 @@ flowchart TD
   B --> O[Multistep ABM4 module]
   B --> P[Multistep ABM6 module]
   B --> Q[Nordsieck adaptive ABM module]
+  B --> R[Uncertainty STM and covariance module]
 ```
 
 ## Build and test
@@ -168,6 +171,39 @@ nopt.atol = 1e-12;
 auto nres = ode::multistep::integrate_nordsieck_abm4(rhs, t0, y0, t1, nopt);
 ```
 
+Uncertainty propagation (state + STM + covariance):
+
+```cpp
+#include <ode/uncertainty.hpp>
+
+using State = ode::DynamicState;
+using Matrix = ode::DynamicMatrix;
+
+auto dynamics = [](double t, const auto& x, auto& dxdt) {
+  dxdt.resize(2);
+  dxdt[0] = x[1];
+  dxdt[1] = -2.0 * x[0] - 3.0 * x[1];
+};
+
+auto jac_ad = [&dynamics](double t, const State& x, Matrix& a) {
+  return ode::uncertainty::jacobian_forward_ad(dynamics, t, x, a);
+};
+
+auto q_const = [](double, const State& x, Matrix& q) {
+  q.assign(x.size() * x.size(), 0.0);
+  q[0] = 1e-6;
+  q[3] = 1e-6;
+  return true;
+};
+
+State x0{1.0, 0.0};
+Matrix p0{1e-3, 0.0, 0.0, 1e-3};
+ode::IntegratorOptions opt;
+
+auto out = ode::uncertainty::integrate_state_stm_cov(
+    ode::RKMethod::RKF78, dynamics, jac_ad, q_const, 0.0, x0, p0, 10.0, opt);
+```
+
 ## Simple 2-body orbital example
 
 Build and run:
@@ -229,6 +265,7 @@ Optional overrides:
 - stiff module smoke/regression
 - multistep ABM4 regression/consistency checks
 - multistep ABM6 and Nordsieck regression checks
+- uncertainty STM/covariance + AD Jacobian regression checks
 - install/package-consumer smoke
 
 ## API docs (Doxygen)
