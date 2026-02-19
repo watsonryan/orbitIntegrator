@@ -8,8 +8,7 @@ if(ODE_FETCH_DEPS)
 
   CPMAddPackage(
     NAME fmt
-    GIT_REPOSITORY https://github.com/fmtlib/fmt.git
-    GIT_TAG 12.1.0
+    URL https://github.com/fmtlib/fmt/archive/refs/tags/12.1.0.tar.gz
     OPTIONS "FMT_TEST OFF" "FMT_DOC OFF" "FMT_INSTALL ON"
   )
 
@@ -22,8 +21,7 @@ if(ODE_FETCH_DEPS)
   if(ODE_ENABLE_EIGEN)
     CPMAddPackage(
       NAME eigen
-      GIT_REPOSITORY https://gitlab.com/libeigen/eigen.git
-      GIT_TAG 5.0.1
+      URL https://gitlab.com/libeigen/eigen/-/archive/5.0.1/eigen-5.0.1.tar.gz
       OPTIONS "EIGEN_BUILD_DOC OFF" "EIGEN_BUILD_PKGCONFIG OFF" "BUILD_TESTING OFF"
     )
   endif()
