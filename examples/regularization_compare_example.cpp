@@ -1,8 +1,8 @@
 #include <cmath>
-#include <iostream>
 #include <vector>
 
 #include "ode/ode.hpp"
+#include "ode/logging.hpp"
 
 int main() {
   constexpr double mu = 398600.4418;  // km^3/s^2
@@ -44,24 +44,19 @@ int main() {
   const auto lc = ode::regularization::integrate_two_body_levi_civita(mu, 0.0, s0, tf, ropt);
   const auto sund = ode::regularization::integrate_two_body_sundman(mu, ode::RKMethod::RKF78, 0.0, s0, tf, opt, 1e-9);
 
-  std::cout.setf(std::ios::scientific);
-  std::cout.precision(15);
-  std::cout << "Cowell: x y vx vy = "
-            << cowell.y[0] << " " << cowell.y[1] << " " << cowell.y[2] << " " << cowell.y[3] << "\n";
-  std::cout << "Levi-Civita: x y vx vy = "
-            << lc.state.x << " " << lc.state.y << " " << lc.state.vx << " " << lc.state.vy << "\n";
-  std::cout << "Sundman: x y vx vy = "
-            << sund.state.x << " " << sund.state.y << " " << sund.state.vx << " " << sund.state.vy << "\n";
-  std::cout << "Delta LC-Cowell: "
-            << (lc.state.x - cowell.y[0]) << " "
-            << (lc.state.y - cowell.y[1]) << " "
-            << (lc.state.vx - cowell.y[2]) << " "
-            << (lc.state.vy - cowell.y[3]) << "\n";
-  std::cout << "Delta Sundman-Cowell: "
-            << (sund.state.x - cowell.y[0]) << " "
-            << (sund.state.y - cowell.y[1]) << " "
-            << (sund.state.vx - cowell.y[2]) << " "
-            << (sund.state.vy - cowell.y[3]) << "\n";
+  ode::log::Info("Cowell: x y vx vy = ", cowell.y[0], " ", cowell.y[1], " ", cowell.y[2], " ", cowell.y[3]);
+  ode::log::Info("Levi-Civita: x y vx vy = ", lc.state.x, " ", lc.state.y, " ", lc.state.vx, " ", lc.state.vy);
+  ode::log::Info("Sundman: x y vx vy = ", sund.state.x, " ", sund.state.y, " ", sund.state.vx, " ", sund.state.vy);
+  ode::log::Info("Delta LC-Cowell: ",
+                 (lc.state.x - cowell.y[0]), " ",
+                 (lc.state.y - cowell.y[1]), " ",
+                 (lc.state.vx - cowell.y[2]), " ",
+                 (lc.state.vy - cowell.y[3]));
+  ode::log::Info("Delta Sundman-Cowell: ",
+                 (sund.state.x - cowell.y[0]), " ",
+                 (sund.state.y - cowell.y[1]), " ",
+                 (sund.state.vx - cowell.y[2]), " ",
+                 (sund.state.vy - cowell.y[3]));
 
   const ode::regularization::TwoBody3DState s03{9000.0, 500.0, 1000.0, -1.0, 6.6, 0.8};
   const double tf3 = 2.0 * 3600.0;
@@ -81,18 +76,18 @@ int main() {
   };
   const auto cowell3 = ode::integrate(ode::RKMethod::RKF78, rhs3, 0.0, y03, tf3, opt);
   const auto ks = ode::regularization::integrate_two_body_ks(mu, 0.0, s03, tf3, ropt);
-  std::cout << "Cowell3D: x y z vx vy vz = "
-            << cowell3.y[0] << " " << cowell3.y[1] << " " << cowell3.y[2] << " "
-            << cowell3.y[3] << " " << cowell3.y[4] << " " << cowell3.y[5] << "\n";
-  std::cout << "KS3D: x y z vx vy vz = "
-            << ks.state.x << " " << ks.state.y << " " << ks.state.z << " "
-            << ks.state.vx << " " << ks.state.vy << " " << ks.state.vz << "\n";
-  std::cout << "Delta KS3D-Cowell3D: "
-            << (ks.state.x - cowell3.y[0]) << " "
-            << (ks.state.y - cowell3.y[1]) << " "
-            << (ks.state.z - cowell3.y[2]) << " "
-            << (ks.state.vx - cowell3.y[3]) << " "
-            << (ks.state.vy - cowell3.y[4]) << " "
-            << (ks.state.vz - cowell3.y[5]) << "\n";
+  ode::log::Info("Cowell3D: x y z vx vy vz = ",
+                 cowell3.y[0], " ", cowell3.y[1], " ", cowell3.y[2], " ",
+                 cowell3.y[3], " ", cowell3.y[4], " ", cowell3.y[5]);
+  ode::log::Info("KS3D: x y z vx vy vz = ",
+                 ks.state.x, " ", ks.state.y, " ", ks.state.z, " ",
+                 ks.state.vx, " ", ks.state.vy, " ", ks.state.vz);
+  ode::log::Info("Delta KS3D-Cowell3D: ",
+                 (ks.state.x - cowell3.y[0]), " ",
+                 (ks.state.y - cowell3.y[1]), " ",
+                 (ks.state.z - cowell3.y[2]), " ",
+                 (ks.state.vx - cowell3.y[3]), " ",
+                 (ks.state.vy - cowell3.y[4]), " ",
+                 (ks.state.vz - cowell3.y[5]));
   return 0;
 }
