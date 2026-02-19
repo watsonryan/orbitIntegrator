@@ -17,6 +17,7 @@ int main() {
     const State y0{1.0};
     ode::multistep::AdamsBashforthMoultonOptions opt;
     opt.h = 0.01;
+    opt.mode = ode::multistep::PredictorCorrectorMode::Iterated;
     opt.corrector_iterations = 2;
 
     const auto res = ode::multistep::integrate_abm4(rhs, 0.0, y0, 1.0, opt);
@@ -36,6 +37,7 @@ int main() {
     const State y1{std::exp(1.0)};
     ode::multistep::AdamsBashforthMoultonOptions opt;
     opt.h = 0.01;
+    opt.mode = ode::multistep::PredictorCorrectorMode::Iterated;
     opt.corrector_iterations = 2;
 
     const auto res = ode::multistep::integrate_abm4(rhs, 1.0, y1, 0.0, opt);
@@ -55,6 +57,7 @@ int main() {
     const State y0{1.0};
     ode::multistep::AdamsBashforthMoultonOptions ms_opt;
     ms_opt.h = 0.01;
+    ms_opt.mode = ode::multistep::PredictorCorrectorMode::Iterated;
     ms_opt.corrector_iterations = 2;
 
     ode::IntegratorOptions rk_opt;
@@ -72,6 +75,43 @@ int main() {
 
     if (std::abs(abm.y[0] - rk.y[0]) > 5e-8) {
       std::cerr << "ABM vs RK mismatch: " << abm.y[0] << " vs " << rk.y[0] << "\n";
+      return 1;
+    }
+  }
+
+  {
+    const State y0{1.0};
+    ode::multistep::AdamsBashforthMoultonOptions pec_opt;
+    pec_opt.h = 0.01;
+    pec_opt.mode = ode::multistep::PredictorCorrectorMode::PEC;
+
+    ode::multistep::AdamsBashforthMoultonOptions pece_opt = pec_opt;
+    pece_opt.mode = ode::multistep::PredictorCorrectorMode::PECE;
+
+    ode::multistep::AdamsBashforthMoultonOptions iter_opt = pec_opt;
+    iter_opt.mode = ode::multistep::PredictorCorrectorMode::Iterated;
+    iter_opt.corrector_iterations = 2;
+
+    const auto pec = ode::multistep::integrate_abm4(rhs, 0.0, y0, 1.0, pec_opt);
+    const auto pece = ode::multistep::integrate_abm4(rhs, 0.0, y0, 1.0, pece_opt);
+    const auto iter = ode::multistep::integrate_abm4(rhs, 0.0, y0, 1.0, iter_opt);
+    if (pec.status != ode::IntegratorStatus::Success ||
+        pece.status != ode::IntegratorStatus::Success ||
+        iter.status != ode::IntegratorStatus::Success) {
+      std::cerr << "ABM mode run failed\n";
+      return 1;
+    }
+
+    const double exact = std::exp(1.0);
+    const double e_pec = std::abs(pec.y[0] - exact);
+    const double e_pece = std::abs(pece.y[0] - exact);
+    const double e_iter = std::abs(iter.y[0] - exact);
+    if (!(e_pece <= e_pec * 1.2)) {
+      std::cerr << "PECE should be at least as accurate as PEC in this case\n";
+      return 1;
+    }
+    if (!(e_iter <= e_pece * 1.2)) {
+      std::cerr << "Iterated should be at least as accurate as PECE in this case\n";
       return 1;
     }
   }

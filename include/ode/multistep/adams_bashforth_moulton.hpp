@@ -4,6 +4,7 @@
  */
 #pragma once
 
+#include <algorithm>
 #include <array>
 #include <cmath>
 #include <utility>
@@ -15,9 +16,17 @@
 
 namespace ode::multistep {
 
+enum class PredictorCorrectorMode {
+  PEC,       // Predictor -> Evaluate(predicted) -> Correct
+  PECE,      // Predictor -> Evaluate(predicted) -> Correct -> Evaluate(corrected)
+  Iterated   // Repeated correct/evaluate cycles
+};
+
 struct AdamsBashforthMoultonOptions {
   double h = 0.0;
   int max_steps = 1000000;
+  PredictorCorrectorMode mode = PredictorCorrectorMode::PECE;
+  // Used only when mode == Iterated.
   int corrector_iterations = 1;
 };
 
@@ -34,7 +43,11 @@ requires AlgebraFor<Algebra, State>
   out.t = t0;
   out.y = y0;
 
-  if (!(opt.h > 0.0) || !std::isfinite(opt.h) || opt.max_steps <= 0 || opt.corrector_iterations <= 0) {
+  if (!(opt.h > 0.0) || !std::isfinite(opt.h) || opt.max_steps <= 0) {
+    out.status = IntegratorStatus::InvalidStepSize;
+    return out;
+  }
+  if (opt.mode == PredictorCorrectorMode::Iterated && opt.corrector_iterations <= 0) {
     out.status = IntegratorStatus::InvalidStepSize;
     return out;
   }
@@ -56,10 +69,12 @@ requires AlgebraFor<Algebra, State>
   State y_pred{};
   State y_corr{};
   State f_pred{};
+  State f_next{};
   Algebra::resize_like(y_next, y0);
   Algebra::resize_like(y_pred, y0);
   Algebra::resize_like(y_corr, y0);
   Algebra::resize_like(f_pred, y0);
+  Algebra::resize_like(f_next, y0);
 
   auto eval_rhs = [&](double t, const State& y, State& dydt) -> bool {
     rhs(t, y, dydt);
@@ -165,25 +180,51 @@ requires AlgebraFor<Algebra, State>
       return out;
     }
 
-    // AM4 corrector iterations.
-    Algebra::assign(y_corr, out.y);
-    for (int it = 0; it < opt.corrector_iterations; ++it) {
-      Algebra::assign(y_corr, out.y);
+    auto apply_am4_corrector = [&](const State& f_np1_estimate, State& y_out) {
+      Algebra::assign(y_out, out.y);
       // y_{n+1} = y_n + h/24 * (9f_{n+1} + 19f_n - 5f_{n-1} + f_{n-2})
-      Algebra::axpy((h / 24.0) * 9.0, f_pred, y_corr);
-      Algebra::axpy((h / 24.0) * 19.0, f_hist[3], y_corr);
-      Algebra::axpy((h / 24.0) * -5.0, f_hist[2], y_corr);
-      Algebra::axpy((h / 24.0) * 1.0, f_hist[1], y_corr);
+      Algebra::axpy((h / 24.0) * 9.0, f_np1_estimate, y_out);
+      Algebra::axpy((h / 24.0) * 19.0, f_hist[3], y_out);
+      Algebra::axpy((h / 24.0) * -5.0, f_hist[2], y_out);
+      Algebra::axpy((h / 24.0) * 1.0, f_hist[1], y_out);
+    };
 
+    if (opt.mode == PredictorCorrectorMode::PEC) {
+      apply_am4_corrector(f_pred, y_corr);
       if (!Algebra::finite(y_corr)) {
         out.status = IntegratorStatus::NaNDetected;
         return out;
       }
-
-      if (!eval_rhs(t_next, y_corr, f_pred)) {
+      Algebra::assign(f_next, f_pred);
+    } else if (opt.mode == PredictorCorrectorMode::PECE) {
+      apply_am4_corrector(f_pred, y_corr);
+      if (!Algebra::finite(y_corr)) {
         out.status = IntegratorStatus::NaNDetected;
         return out;
       }
+      if (!eval_rhs(t_next, y_corr, f_next)) {
+        out.status = IntegratorStatus::NaNDetected;
+        return out;
+      }
+    } else {
+      const int n_iter = std::max(1, opt.corrector_iterations);
+      Algebra::assign(f_next, f_pred);
+      for (int it = 0; it < n_iter; ++it) {
+        apply_am4_corrector(f_next, y_corr);
+        if (!Algebra::finite(y_corr)) {
+          out.status = IntegratorStatus::NaNDetected;
+          return out;
+        }
+        if (!eval_rhs(t_next, y_corr, f_next)) {
+          out.status = IntegratorStatus::NaNDetected;
+          return out;
+        }
+      }
+    }
+
+    if (!Algebra::finite(y_corr) || !Algebra::finite(f_next)) {
+      out.status = IntegratorStatus::NaNDetected;
+      return out;
     }
 
     // Accept and shift history.
@@ -194,7 +235,7 @@ requires AlgebraFor<Algebra, State>
     f_hist[0] = f_hist[1];
     f_hist[1] = f_hist[2];
     f_hist[2] = f_hist[3];
-    f_hist[3] = f_pred;
+    f_hist[3] = f_next;
 
     if (obs && !obs(out.t, out.y)) {
       out.status = IntegratorStatus::UserStopped;

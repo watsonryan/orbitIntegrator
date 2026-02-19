@@ -81,12 +81,17 @@ MethodMetrics RunRkf78(int total_runs, const State& y0) {
                        rhs_sum / total_runs};
 }
 
-MethodMetrics RunAbm4(int total_runs, const State& y0) {
+MethodMetrics RunAbm4(int total_runs,
+                      const State& y0,
+                      ode::multistep::PredictorCorrectorMode mode,
+                      int iter_count,
+                      const char* label) {
   auto rhs = MakeRhs();
 
   ode::multistep::AdamsBashforthMoultonOptions opt;
   opt.h = 0.01;
-  opt.corrector_iterations = 2;
+  opt.mode = mode;
+  opt.corrector_iterations = iter_count;
 
   double err_sum = 0.0;
   double steps_sum = 0.0;
@@ -106,7 +111,7 @@ MethodMetrics RunAbm4(int total_runs, const State& y0) {
   const auto t1 = std::chrono::steady_clock::now();
 
   const double sec = std::chrono::duration<double>(t1 - t0).count();
-  return MethodMetrics{"ABM4(fixed)", sec, total_runs / sec, err_sum / total_runs, steps_sum / total_runs,
+  return MethodMetrics{label, sec, total_runs / sec, err_sum / total_runs, steps_sum / total_runs,
                        rhs_sum / total_runs};
 }
 
@@ -165,12 +170,16 @@ int main() {
   State y0{1.0};
 
   const auto rk = RunRkf78(total_runs, y0);
-  const auto abm = RunAbm4(total_runs, y0);
+  const auto abm_pec = RunAbm4(total_runs, y0, ode::multistep::PredictorCorrectorMode::PEC, 1, "ABM4-PEC");
+  const auto abm_pece = RunAbm4(total_runs, y0, ode::multistep::PredictorCorrectorMode::PECE, 1, "ABM4-PECE");
+  const auto abm_iter = RunAbm4(total_runs, y0, ode::multistep::PredictorCorrectorMode::Iterated, 2, "ABM4-Iter2");
   const auto sund = RunSundmanRkf78(total_runs, y0);
 
   std::cout << "method             runs/sec    mean_abs_err   mean_steps   mean_rhs\n";
   PrintRow(rk);
-  PrintRow(abm);
+  PrintRow(abm_pec);
+  PrintRow(abm_pece);
+  PrintRow(abm_iter);
   PrintRow(sund);
 
   return 0;
